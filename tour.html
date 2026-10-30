@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style>
+<title>Газлайт 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: полноэкранная сцена, панель карточки справа (снизу на телефоне), шапка с кнопками сверху */
+:root{--bg:#1b1410;--ink:#f3e9dc;--muted:#c8b8a6;--card:#2a201a;--line:#4a3a2e;--accent:#e0a458;--bad:#e4705a;--ok:#8fc78a;--disp:"Playfair Display",Georgia,serif;--body:"Inter Tight","Segoe UI",system-ui,sans-serif;color-scheme:dark}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden}
+#scene{position:fixed;inset:0}
+canvas{display:block}
+.bar{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(var(--bg),transparent);z-index:5}
+.bar h1{font-family:var(--disp);font-weight:600;font-size:22px;margin:0 12px 0 0;letter-spacing:.01em}
+.bar button{font:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+.bar button:hover,.bar button:focus-visible{border-color:var(--accent);outline:none}
+.bar .hint{font-size:12px;color:var(--muted)}
+#panel{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:72px;width:min(380px,calc(100vw - 32px));max-height:calc(100% - 96px);overflow:auto;background:color-mix(in srgb,var(--card) 94%,transparent);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;z-index:6;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+#panel .tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+#panel h2{font-family:var(--disp);font-weight:600;font-size:24px;margin:0 0 8px;text-wrap:balance}
+#panel p{font-size:14px;line-height:1.5;color:var(--muted);margin:0 0 10px}
+#panel .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+#panel .k{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+#panel .k b{display:block;font-family:var(--disp);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+#panel .k span{font-size:11px;color:var(--muted)}
+#panel .k.bad b{color:var(--bad)} #panel .k.ok b{color:var(--ok)}
+#panel .act{border-left:3px solid var(--accent);padding:6px 10px;font-size:14px;color:var(--ink);background:rgba(224,164,88,.08);border-radius:0 8px 8px 0}
+#panel .close{float:right;background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer}
+.pin{position:fixed;transform:translate(-50%,-100%);z-index:4;font-size:12px;font-weight:600;color:var(--bg);background:var(--accent);border-radius:999px;padding:3px 9px;white-space:nowrap;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);user-select:none}
+.pin::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-top-color:var(--accent);border-bottom:0}
+.pin.on{background:var(--ink)} .pin.on::after{border-top-color:var(--ink)}
+#cap{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:rgba(0,0,0,.55);padding:8px 16px;border-radius:999px;font-size:14px;z-index:5;max-width:calc(100vw - 32px);text-align:center}
+#pad{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:none;grid-template-columns:repeat(3,44px);gap:6px;z-index:5}
+#pad button{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:18px}
+@media (max-width:700px){#panel{top:auto;bottom:calc(76px + env(safe-area-inset-bottom,0px));max-height:45%}.bar .hint{display:none}#pad{display:grid}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600&family=Playfair+Display:wght@600&display=swap">
+
+<div id="scene"></div>
+<div class="bar">
+  <h1>Газлайт 3D</h1>
+  <button id="tour" type="button">▶ Экскурсия по процессу</button>
+  <button id="reset" type="button">Вид сверху</button>
+  <span class="hint">WASD / стрелки — идти, тянуть мышью — осматриваться, клик по метке — данные</span>
+</div>
+<div id="panel"></div>
+<div id="cap">Кофейня The Gaslight Cafe · учебная модель · нажмите на метку или «Экскурсию»</div>
+<div id="pad"><span></span><button data-k="w" aria-label="Вперёд">▲</button><span></span><button data-k="a" aria-label="Влево">◀</button><button data-k="s" aria-label="Назад">▼</button><button data-k="d" aria-label="Вправо">▶</button></div>
+
+<script src="vendor/three.min.js"></script>
+<script>
+// Данные из отчёта (учебный набор, 01.04–25.10.2026)
+const SPOTS = [
+ {id:'door', label:'Вход · C1–C2', pos:[0,2.4,7.6], cam:[0,1.7,11], look:[0,1.4,6],
+  tag:'CJM C1 Поиск → C2 Вход', title:'Как гость находит кофейню',
+  text:'До регистрации заказа гость не идентифицирован. Канал знакомства берём из анкеты карты лояльности, очередь до кассы измеряем хронометражем.',
+  kpis:[['33 %','нашли через карты (Яндекс, 2ГИС)',''],['40 из 525','ушли без заказа (наблюдения)','bad'],['1,9 мин','очередь утром будней','bad'],['0,9 мин','очередь в остальное время','ok']],
+  act:'Обновить карточки на картах: часы, меню, фото входа.'},
+ {id:'menu', label:'Меню · ABC', pos:[-2.2,3.3,-4.4], cam:[-1.5,1.7,0], look:[-2.2,2.6,-4.4],
+  tag:'C2 Выбор · справочник товаров', title:'Что покупают',
+  text:'24 позиции в 7 категориях. Группа A (80 % выручки) — 12 позиций, лидеры: латте, флэт уайт, капучино.',
+  kpis:[['45,7 %','кофе на эспрессо',''],['22,0 %','холодные напитки (3 % → 39 % → 6 %)',''],['≈79 %','маржа напитков','ok'],['66–70 %','маржа еды','']],
+  act:'К ноябрю добавить тёплые авторские напитки: чек падает вместе с уходом холодных.'},
+ {id:'pastry', label:'Витрина · G01', pos:[1.6,1.9,-2.3], cam:[2.4,1.7,1.6], look:[1.6,1.1,-2.3],
+  tag:'BPMN G01 «Наличие?» → T02 замена', title:'Выпечка заканчивается',
+  text:'В выходные выпечки не хватает после обеда. Половина гостей соглашается на замену, остальные уходят — это отмена по наличию (T07).',
+  kpis:[['206','отмен из-за наличия','bad'],['3,35 %','заказов выходных после 15:00','bad'],['16:09','последняя продажа выпечки (вых.)',''],['≈98 тыс. ₽','потеряно за период','bad']],
+  act:'+4–5 шт. в выходные и вторая поставка к 14:00.'},
+ {id:'cash', label:'Касса · T01–T03', pos:[-0.4,1.9,-2.3], cam:[-0.4,1.7,1.4], look:[-0.4,1.1,-2.3],
+  tag:'BPMN T01 регистрация · T03/G03 оплата', title:'Касса: здесь рождаются данные',
+  text:'Касса создаёт order_id, состав, цену, формат и карту гостя; терминал — попытки оплаты (в UTC, ETL переводит в МСК).',
+  kpis:[['24 178','заказов зарегистрировано',''],['99,2 %','конверсия в оплату','ok'],['475,8 ₽','средний чек',''],['47 %','заказов с картой гостя','']],
+  act:'QR-карта в Wallet: поднять идентификацию до 60 %.'},
+ {id:'machine', label:'Бар · T04–T05', pos:[-2.6,2.3,-3.2], cam:[-0.8,1.7,-0.4], look:[-2.6,1.3,-3.2],
+  tag:'BPMN T04 приготовить · CJM C4 Ожидание', title:'Узкое место — бар в утренний пик',
+  text:'В будни утром один бариста. Ожидание = ready_at − paid_at по экрану заказов. Тема «ожидание» в отзывах — худшая.',
+  kpis:[['4,3 мин','медиана ожидания',''],['7,9 мин','медиана в 9:00 будней','bad'],['30 %','в срок 5 мин в 9:00','bad'],['2,7★','отзывы про ожидание','bad']],
+  act:'Второй бариста 8:00–10:30, батч-фильтр заранее. Цель: ≥ 70 % в срок.'},
+ {id:'pickup', label:'Выдача · T06', pos:[2.9,1.9,-2.3], cam:[3.4,1.7,0.8], look:[2.9,1.1,-2.3],
+  tag:'BPMN T06 выдать · E02', title:'Выдача заказа',
+  text:'Воронка: зарегистрирован → оплачен → готов → выдан, по уникальным order_id.',
+  kpis:[['23 861','выдано',''],['99,5 %','выдано из оплаченных','ok'],['111','готовы, но не забрали',''],['88,5 %','CSAT (4–5)','ok']],
+  act:'Вечером выходных P90 растёт до 12 мин после ухода второго бариста: продлить смену до 18:00.'},
+ {id:'tables', label:'Зал · C5', pos:[2.6,1.6,2.6], cam:[0.6,1.7,4.8], look:[2.6,0.8,2.6],
+  tag:'CJM C5 Опыт · формат «в зале»', title:'Зал против «с собой»',
+  text:'Гости в зале берут больше позиций и завтраки, гости навынос — эспрессо-напитки. Повтор почти одинаков.',
+  kpis:[['553 ₽','чек в зале',''],['413 ₽','чек с собой',''],['1,8','позиций в зале',''],['146 vs 130','заказов в дождливые vs сухие выходные','']],
+  act:'Комбо «кофе + завтрак» для зала в выходные.'},
+ {id:'books', label:'Полка · C6 / RFM', pos:[-4.3,2.6,2.2], cam:[-1.8,1.7,3.4], look:[-4.3,1.6,2.2],
+  tag:'CJM C6 Повтор · RFM', title:'Кто возвращается',
+  text:'RFM по 1 832 гостям с картой. Чемпионы приходят утром — в худшее для ожидания окно.',
+  kpis:[['35 %','гостей — «Чемпионы»',''],['70 %','их доля выручки','ok'],['154','«под угрозой ухода»','bad'],['45,8 %','повтор за 30 дней','']],
+  act:'Персональное приглашение «под угрозой», A/B на половине сегмента.'},
+];
+const TOUR = ['door','menu','cash','pastry','machine','pickup','tables','books'];
+
+const W = () => innerWidth, H = () => innerHeight;
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(W(),H());
+renderer.shadowMap.enabled = true; renderer.outputEncoding = THREE.sRGBEncoding;
+document.getElementById('scene').appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1b1410); scene.fog = new THREE.Fog(0x1b1410, 14, 30);
+const cam = new THREE.PerspectiveCamera(60, W()/H(), 0.1, 100);
+
+const M = (c, r=0.8, m=0) => new THREE.MeshStandardMaterial({color:c, roughness:r, metalness:m});
+const box = (w,h,d,mat,x,y,z,parent=scene) => { const g = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); g.position.set(x,y,z); g.castShadow = g.receiveShadow = true; parent.add(g); return g; };
+const cyl = (rt,rb,h,mat,x,y,z,seg=24) => { const g = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg), mat); g.position.set(x,y,z); g.castShadow = g.receiveShadow = true; scene.add(g); return g; };
+
+// Комната 10 × 15, высота 3.6
+const wood = M(0x6b4a33), dark = M(0x3a2a20), wall = M(0x8c3f2e, .95), wall2 = M(0xd9c9b0, .95), brass = M(0xb8893a, .35, .8), steel = M(0x9aa3a8, .3, .9), glass = new THREE.MeshStandardMaterial({color:0xcfe6ef, transparent:true, opacity:.25, roughness:.05});
+const floorTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  for (let i=0;i<8;i++) for (let j=0;j<8;j++){ x.fillStyle = (i+j)%2 ? '#2b2420' : '#d8cdbb'; x.fillRect(i*32,j*32,32,32); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5,7); return t; })();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(10,15), new THREE.MeshStandardMaterial({map:floorTex, roughness:.7})); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+box(10,3.6,.2,wall,0,1.8,-7.5); box(.2,3.6,15,wall2,-5,1.8,0); box(.2,3.6,15,wall2,5,1.8,0);
+box(3.6,3.6,.2,wall,-3.2,1.8,7.5); box(3.6,3.6,.2,wall,3.2,1.8,7.5); box(2.8,.8,.2,wall,0,3.2,7.5);
+box(1.4,2.6,.08,M(0x2b3a2e,.5),0,1.3,7.52); box(.08,.3,.04,brass,.5,1.2,7.45);   // дверь
+box(.1,1.6,3,glass,4.94,1.9,3.5);                                                  // окно
+// неоновая вывеска
+const signC = document.createElement('canvas'); signC.width = 512; signC.height = 128; const sx = signC.getContext('2d');
+sx.fillStyle = '#1b1410'; sx.fillRect(0,0,512,128); sx.font = 'italic 600 72px Georgia'; sx.fillStyle = '#ffcf8a'; sx.shadowColor = '#ff9d3c'; sx.shadowBlur = 24; sx.textAlign = 'center'; sx.fillText('The Gaslight', 256, 88);
+const sign = new THREE.Mesh(new THREE.PlaneGeometry(3,.75), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(signC)})); sign.position.set(0,2.9,-7.38); scene.add(sign);
+// стойка
+box(7,1.05,.9,wood,0.2,.52,-2.3); box(7.2,.08,1.05,dark,0.2,1.08,-2.3);
+box(9.6,.9,.7,wood,0,.45,-6.9); box(9.6,.06,.8,dark,0,.92,-6.9);                      // задний бар
+// кофемашина
+const em = box(1.3,.7,.6,steel,-2.6,1.47,-2.4); box(1.3,.08,.6,brass,-2.6,1.86,-2.4);
+[-3.0,-2.6,-2.2].forEach(x => { cyl(.05,.05,.12,dark,x,1.06+.18,-2.05,12); });
+cyl(.12,.12,.35,dark,-1.7,1.3,-2.4); // кофемолка
+// касса и терминал
+box(.5,.3,.4,M(0x222222,.4),-.4,1.27,-2.3); box(.45,.28,.03,M(0x5fb3c9,.2,.1),-.4,1.5,-2.45); box(.12,.18,.08,M(0x333333),.0,1.2,-2.1);
+// витрина
+box(1.6,.6,.8,glass,1.6,1.42,-2.3); box(1.6,.04,.8,brass,1.6,1.73,-2.3);
+for (let i=0;i<5;i++){ const c = new THREE.Mesh(new THREE.TorusGeometry(.09,.05,8,16,Math.PI), M(0xd59a4a,.6)); c.position.set(1.0+i*.3,1.2,-2.25); c.rotation.x = -Math.PI/2; scene.add(c); }
+// стойка выдачи
+box(.9,.05,.5,brass,2.9,1.13,-2.3); cyl(.06,.05,.14,M(0xffffff,.4),2.75,1.2,-2.3,12); cyl(.06,.05,.14,M(0xffffff,.4),3.05,1.2,-2.3,12);
+// доска меню
+const menuC = document.createElement('canvas'); menuC.width = 512; menuC.height = 340; const mx = menuC.getContext('2d');
+mx.fillStyle = '#1f2421'; mx.fillRect(0,0,512,340); mx.fillStyle = '#efe6d4'; mx.font = '600 34px Georgia'; mx.fillText('Меню', 30, 50); mx.font = '22px Georgia';
+[['Капучино 0,3','310'],['Флэт уайт','330'],['Латте 0,4','350'],['Фильтр V60','320'],['Колд брю','330'],['Круассан','210'],['Сырники','420']].forEach(([n,p],i) => { mx.fillText(n, 30, 92+i*34); mx.fillText(p+' ₽', 410, 92+i*34); });
+const menu = new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.6), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(menuC)})); menu.position.set(-2.2,2.6,-7.38); scene.add(menu);
+// столы и стулья
+const table = (x,z) => { cyl(.45,.45,.05,wood,x,.75,z); cyl(.05,.05,.72,dark,x,.37,z,10);
+  [[.7,0],[-.7,0]].forEach(([dx,dz]) => { box(.42,.05,.42,dark,x+dx,.46,z+dz); box(.42,.45,.05,dark,x+dx+(dx>0?.2:-.2),.7,z+dz).rotation.y = Math.PI/2; [-.17,.17].forEach(a=>[-.17,.17].forEach(b=>box(.04,.44,.04,dark,x+dx+a,.22,z+dz+b))); });
+  cyl(.05,.04,.1,M(0xffffff,.4),x+.1,.83,z,12); };
+table(2.6,1.8); table(2.6,4.4); table(-1.0,3.2); table(-1.0,5.8);
+// книжная полка
+box(.4,2.4,2.4,wood,-4.75,1.2,2.2);
+const bookCols = [0x8c3f2e,0x2f5d62,0xd9a441,0x5a3d5c,0x3b6e3a,0xc96f4a];
+for (let s=0;s<4;s++){ box(.42,.04,2.4,dark,-4.72,.3+s*.6,2.2); for (let b=0;b<10;b++) box(.3,.38+((b*7)%5)*.03,.16,M(bookCols[(b+s)%6]),-4.62,.52+s*.6,1.2+b*.21); }
+box(.4,.1,.5,M(0xc8b49a),-1.0,.83,3.2);  // настолка на столе
+// лампы
+const lampMat = new THREE.MeshStandardMaterial({color:0xffd9a0, emissive:0xffb35c, emissiveIntensity:1.6});
+[[-2,-2.3],[0.6,-2.3],[2.6,1.8],[2.6,4.4],[-1,3.2],[-1,5.8]].forEach(([x,z]) => { cyl(.005,.005,1.2,dark,x,3.05,z,4); const b = new THREE.Mesh(new THREE.SphereGeometry(.09,12,10), lampMat); b.position.set(x,2.42,z); scene.add(b); });
+// свет
+scene.add(new THREE.HemisphereLight(0xffe2c0, 0x2a1d14, .55));
+const key = new THREE.PointLight(0xffc27a, 1.1, 18, 2); key.position.set(0,3.2,0); key.castShadow = true; scene.add(key);
+const bar = new THREE.PointLight(0xffb060, .9, 9, 2); bar.position.set(0,2.6,-3.5); scene.add(bar);
+const hall = new THREE.PointLight(0xffd29a, .7, 10, 2); hall.position.set(1,2.5,4); scene.add(hall);
+const winL = new THREE.DirectionalLight(0x9fc4ff, .35); winL.position.set(9,4,3); scene.add(winL);
+
+// метки
+const pins = SPOTS.map(s => { const el = document.createElement('div'); el.className = 'pin'; el.textContent = s.label; el.tabIndex = 0; el.setAttribute('role','button');
+  el.addEventListener('click', () => focusSpot(s.id)); el.addEventListener('keydown', e => { if (e.key==='Enter') focusSpot(s.id); }); document.body.appendChild(el); return {s, el, v:new THREE.Vector3(...s.pos)}; });
+
+const panel = document.getElementById('panel'), cap = document.getElementById('cap');
+function showCard(s){
+  panel.replaceChildren();
+  const close = document.createElement('button'); close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label','Закрыть'); close.onclick = () => { panel.hidden = true; pins.forEach(p=>p.el.classList.remove('on')); };
+  const tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = s.tag;
+  const h = document.createElement('h2'); h.textContent = s.title; const p = document.createElement('p'); p.textContent = s.text;
+  const g = document.createElement('div'); g.className = 'kpis';
+  s.kpis.forEach(([v,l,c]) => { const k = document.createElement('div'); k.className = 'k ' + c; const b = document.createElement('b'); b.textContent = v; const sp = document.createElement('span'); sp.textContent = l; k.append(b, sp); g.appendChild(k); });
+  const a = document.createElement('div'); a.className = 'act'; a.textContent = 'Действие: ' + s.act;
+  panel.append(close, tag, h, p, g, a); panel.hidden = false;
+  pins.forEach(pp => pp.el.classList.toggle('on', pp.s.id === s.id));
+}
+
+// камера: положение + углы
+const pos = new THREE.Vector3(0,9,13); let yaw = 0, pitch = -0.62;
+let anim = null;
+function lookAngles(from, to){ const d = new THREE.Vector3().subVectors(to, from); return {yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z))}; }
+function flyTo(p, l, ms=1600){ const a = lookAngles(new THREE.Vector3(...p), new THREE.Vector3(...l));
+  let dy = a.yaw - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  anim = {t0: performance.now(), ms: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : ms, p0: pos.clone(), p1: new THREE.Vector3(...p), y0: yaw, y1: yaw+dy, pi0: pitch, pi1: a.pitch}; }
+function focusSpot(id){ const s = SPOTS.find(x=>x.id===id); stopTour(); flyTo(s.cam, s.look); showCard(s); cap.textContent = s.tag; }
+
+let tourIdx = -1, tourTimer = null;
+const tourBtn = document.getElementById('tour');
+function stopTour(){ clearTimeout(tourTimer); tourIdx = -1; tourBtn.textContent = '▶ Экскурсия по процессу'; }
+function tourStep(){ tourIdx++; if (tourIdx >= TOUR.length){ stopTour(); cap.textContent = 'Экскурсия завершена: путь гостя пройден от входа до повторного визита'; return; }
+  const s = SPOTS.find(x=>x.id===TOUR[tourIdx]); flyTo(s.cam, s.look, 2200); showCard(s); cap.textContent = `${tourIdx+1}/${TOUR.length} · ${s.tag}`; tourTimer = setTimeout(tourStep, 7000); }
+tourBtn.onclick = () => { if (tourIdx >= 0){ stopTour(); return; } tourBtn.textContent = '■ Остановить'; tourStep(); };
+document.getElementById('reset').onclick = () => { stopTour(); panel.hidden = true; flyTo([0,9,13],[0,0,-1]); cap.textContent = 'Вид сверху: бар у дальней стены, зал у окна, полка с книгами слева'; };
+panel.hidden = true;
+
+// управление
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (['arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+document.querySelectorAll('#pad button').forEach(b => { const k = b.dataset.k; b.addEventListener('pointerdown', () => keys[k] = true); ['pointerup','pointerleave'].forEach(ev => b.addEventListener(ev, () => keys[k] = false)); });
+let drag = null;
+renderer.domElement.addEventListener('pointerdown', e => { drag = {x:e.clientX, y:e.clientY, moved:false}; });
+addEventListener('pointerup', e => { if (drag && !drag.moved) pick(e); drag = null; });
+addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX-drag.x, dy = e.clientY-drag.y; if (Math.abs(dx)+Math.abs(dy) > 3) drag.moved = true;
+  yaw -= dx*.004; pitch = Math.max(-1.3, Math.min(1.1, pitch - dy*.004)); drag.x = e.clientX; drag.y = e.clientY; anim = null; });
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(e){ ndc.set(e.clientX/W()*2-1, -(e.clientY/H())*2+1); ray.setFromCamera(ndc, cam); const hit = ray.intersectObjects(scene.children)[0]; if (!hit) return;
+  let best = null, bd = 1.6; SPOTS.forEach(s => { const d = hit.point.distanceTo(new THREE.Vector3(...s.pos)); if (d < bd + 1.2){ bd = d; best = s; } }); if (best) focusSpot(best.id); }
+
+addEventListener('resize', () => { renderer.setSize(W(),H()); cam.aspect = W()/H(); cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(); const tmp = new THREE.Vector3();
+function frame(){
+  const dt = Math.min(clock.getDelta(), .05);
+  if (anim){ const k = Math.min(1, (performance.now()-anim.t0)/anim.ms), e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    pos.lerpVectors(anim.p0, anim.p1, e); yaw = anim.y0 + (anim.y1-anim.y0)*e; pitch = anim.pi0 + (anim.pi1-anim.pi0)*e; if (k >= 1) anim = null; }
+  const f = (keys.w||keys.arrowup?1:0) - (keys.s||keys.arrowdown?1:0), r = (keys.d||keys.arrowright?1:0) - (keys.a||keys.arrowleft?1:0);
+  if (f||r){ anim = null; if (tourIdx >= 0) stopTour(); const sp = 3*dt; pos.x += (-Math.sin(yaw)*f + Math.cos(yaw)*r)*sp; pos.z += (-Math.cos(yaw)*f - Math.sin(yaw)*r)*sp;
+    pos.y += (1.7 - pos.y) * Math.min(1, dt*3); pos.x = Math.max(-4.6, Math.min(4.6, pos.x)); pos.z = Math.max(-1.6, Math.min(14, pos.z)); }
+  cam.position.copy(pos); cam.rotation.set(0,0,0); cam.rotateY(yaw); cam.rotateX(pitch);
+  renderer.render(scene, cam);
+  pins.forEach(p => { tmp.copy(p.v).project(cam); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1; p.el.hidden = !vis;
+    if (vis){ p.el.style.left = ((tmp.x+1)/2*W()) + 'px'; p.el.style.top = ((1-tmp.y)/2*H()) + 'px'; } });
+  requestAnimationFrame(frame);
+}
+cam.position.copy(pos); flyTo([0,9,13],[0,0,-1],1); frame();
+</script>
+
+</html>

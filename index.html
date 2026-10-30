@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style>
+<title>Газлайт: аналитический проект</title>
+<style>
+/* Layout: одна колонка ~1000px; герой с тезисом, ряд цифр, карточки разделов, этапы проекта, файлы */
+:root{--bg:#17110d;--ink:#f3e9dc;--muted:#bba994;--card:#221912;--line:#3e3027;--accent:#e0a458;--bad:#e4705a;--ok:#8fc78a;--disp:"Playfair Display",Georgia,serif;--body:"Inter Tight","Segoe UI",system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.55;font-size:16px}
+.wrap{max-width:1040px;margin:0 auto;padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--disp);font-weight:600;font-size:clamp(34px,6vw,58px);line-height:1.05;margin:10px 0 14px;text-wrap:balance}
+.lead{font-size:19px;color:var(--muted);max-width:62ch}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:34px 0}
+.nums div{border-top:2px solid var(--accent);padding-top:10px}
+.nums b{display:block;font-family:var(--disp);font-size:34px;font-weight:600;font-variant-numeric:tabular-nums}
+.nums span{color:var(--muted);font-size:14px}
+h2{font-family:var(--disp);font-weight:600;font-size:28px;margin:46px 0 14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;transition:border-color .2s,transform .2s}
+a.card:hover,a.card:focus-visible{border-color:var(--accent);transform:translateY(-2px);outline:none}
+a.card h3{font-family:var(--disp);font-size:22px;margin:6px 0 6px;font-weight:600}
+a.card p{color:var(--muted);margin:0;font-size:15px}
+a.card .go{display:inline-block;margin-top:12px;color:var(--accent);font-weight:600}
+.steps{display:grid;gap:0;border-top:1px solid var(--line)}
+.steps div{display:grid;grid-template-columns:110px 1fr;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
+.steps b{color:var(--accent);font-weight:600}
+.steps span{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:13px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.files a{color:var(--accent)}
+.note{color:var(--muted);font-size:14px;margin-top:40px;border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:reduce){a.card{transition:none}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600&family=Playfair+Display:wght@600&display=swap">
+<div class="wrap">
+  <div class="eyebrow">Итоговый проект · полный цикл аналитики</div>
+  <h1>Где кофейня «Газлайт» теряет гостей и выручку</h1>
+  <p class="lead">Один бариста в утренний пик будней, выпечка, которая заканчивается к вечеру выходных, и постоянные гости, которые ждут дольше всех. Мы прошли путь от BPMN до цифрового двойника и проверили рекомендации на модели.</p>
+  <div class="nums">
+    <div><b>30 %</b><span>заказов готово за 5 минут в 9:00 будней</span></div>
+    <div><b>206</b><span>заказов потеряно из-за отсутствия выпечки</span></div>
+    <div><b>70 %</b><span>выручки гостей с картой дают «Чемпионы»</span></div>
+    <div><b>+594 ₽</b><span>в день даёт второй бариста утром, по модели</span></div>
+  </div>
+
+  <h2>Смотреть</h2>
+  <div class="cards">
+    <a class="card" href="twin.html"><div class="eyebrow">Главное</div><h3>Цифровой двойник</h3><p>Живой день кофейни: гости проходят шаги BPMN и этапы CJM, каждое действие рождает запись данных, витрина пустеет, считаются KPI и экономика. Включите сценарии и сравните итоги.</p><span class="go">Открыть симуляцию →</span></a>
+    <a class="card" href="tour.html"><div class="eyebrow">Экскурсия</div><h3>3D-тур по процессу</h3><p>Пройдите по залу: касса, бар, витрина, выдача, столики, полка. Каждая точка показывает шаг процесса, этап пути гостя, цифры и решение.</p><span class="go">Начать тур →</span></a>
+    <a class="card" href="data/gaslight_calc.xlsx"><div class="eyebrow">Расчёты</div><h3>Книга Excel</h3><p>KPI, описательная статистика, сводные, ожидание по часам, RFM и прогноз — формулами, с контролем по Python.</p><span class="go">Скачать .xlsx →</span></a>
+  </div>
+
+  <h2>Как мы шли</h2>
+  <div class="steps">
+    <div><b>1 · BPMN, CJM</b><span>Процесс «принять, оплатить, приготовить, выдать» с шагами T01–T07 и путь гостя C1–C6; для каждого шага — какие данные рождаются.</span></div>
+    <div><b>2 · Источники</b><span>11 источников: касса, эквайринг, экран заказов, лояльность, смены, опрос, отзывы, техкарты, хронометраж и погода через API Open-Meteo.</span></div>
+    <div><b>3 · ETL</b><span>13 правил очистки: даты двух форматов, дубли выгрузок, тестовые чеки, UTC терминала, опечатки цен; модель «звезда» и 6 проверок.</span></div>
+    <div><b>4 · Аналитика</b><span>KPI, сводные и проверка четырёх гипотез; журнал работы с ИИ и разбор его ошибок.</span></div>
+    <div><b>5 · Сегменты</b><span>RFM по 1 832 гостям и прогноз недельной выручки с проверкой на отложенных неделях.</span></div>
+    <div><b>6 · BI</b><span>Документ обоснования, прототип и дашборд с фильтрами, воронкой, сравнением периодов.</span></div>
+    <div><b>7 · Решения</b><span>Рекомендации проверены на цифровом двойнике по 30 дням каждого сценария.</span></div>
+  </div>
+
+  <h2>Что показала модель</h2>
+  <table>
+    <tr><th>Сценарий</th><th>Доля в срок</th><th>Эффект в день*</th><th>Решение</th></tr>
+    <tr><td>Второй бариста в будни 8:00–10:30</td><td>59 % → 72 %</td><td class="ok">+594 ₽</td><td>Вводить</td></tr>
+    <tr><td>+6 выпечки и поставка в 14:00, выходные</td><td>отказов 2,5 → 0,6 в день</td><td class="ok">+1 297 ₽</td><td>Вводить</td></tr>
+    <tr><td>То же в будни</td><td>списания растут</td><td class="bad">−89 ₽</td><td>Не нужно</td></tr>
+    <tr><td>Вторая смена в выходные до 18:00</td><td>72 % → 76 %</td><td class="bad">−179 ₽</td><td>Не окупается</td></tr>
+  </table>
+  <p class="note">* Результат дня после себестоимости, списаний и ФОТ с учётом будущей выручки, которую теряем из-за недовольных гостей. Данные учебные: продажи, платежи, события, опрос и отзывы синтетические (воспроизводимый генератор), погода реальная. Скрипты, модель данных и журнал ETL — в папке data/ репозитория.</p>
+</div>
+
+</html>

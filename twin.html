@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style>
+<title>Газлайт: цифровой двойник</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: сцена на весь экран; слева процесс (BPMN) и путь гостя (CJM), справа KPI, склад и экономика, снизу лента данных */
+:root{--bg:#17110d;--ink:#f3e9dc;--muted:#bba994;--card:rgba(36,27,21,.9);--line:#4a3a2e;--accent:#e0a458;--ok:#8fc78a;--warn:#e9c46a;--bad:#e4705a;--disp:"Playfair Display",Georgia,serif;--body:"Inter Tight","Segoe UI",system-ui,sans-serif;--mono:"JetBrains Mono",Consolas,monospace;color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;font-size:13px}
+#scene{position:fixed;inset:0}
+canvas{display:block}
+.top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:6;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(var(--bg) 60%,transparent)}
+.top h1{font-family:var(--disp);font-weight:600;font-size:20px;margin:0 6px 0 0}
+#clock{font-family:var(--mono);font-size:22px;color:var(--accent);min-width:64px;font-variant-numeric:tabular-nums}
+.btn,.seg button{font:inherit;color:var(--ink);background:#2a201a;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.seg button:hover,.btn:focus-visible{border-color:var(--accent);outline:none}
+.btn.primary{background:var(--accent);color:#1b1410;border-color:var(--accent);font-weight:600}
+.seg{display:inline-flex;gap:0}.seg button{border-radius:0;padding:6px 10px}.seg button:first-child{border-radius:999px 0 0 999px}.seg button:last-child{border-radius:0 999px 999px 0}
+.seg button.on{background:var(--ink);color:#1b1410}
+.sc{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px dashed var(--line);border-radius:999px;cursor:pointer;user-select:none}
+.sc input{accent-color:var(--accent)}
+.panel{position:fixed;z-index:5;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;backdrop-filter:blur(4px);max-height:calc(100% - 210px);overflow:auto}
+#left{left:max(16px,env(safe-area-inset-left,0px));top:96px;width:250px}
+#right{right:max(16px,env(safe-area-inset-right,0px));top:96px;width:270px}
+.panel h3{margin:4px 0 6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.row{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.row b{font-variant-numeric:tabular-nums}
+.row .id{font-family:var(--mono);color:var(--muted);font-size:11px;min-width:54px}
+.row span.t{flex:1}
+.cjm{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:4px}
+.cjm div{border-radius:6px;padding:5px 2px;text-align:center;font-size:11px;background:#2a201a;border-top:4px solid var(--muted)}
+.cjm small{display:block;color:var(--muted);font-size:9px}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.kp div{background:#1f1712;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.kp b{display:block;font-family:var(--disp);font-size:18px;font-variant-numeric:tabular-nums}
+.kp span{font-size:10px;color:var(--muted)}
+.good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+canvas.mini{width:100%;height:70px;margin-top:4px}
+#feed{position:fixed;z-index:5;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(760px,calc(100vw - 32px));background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-family:var(--mono);font-size:11.5px;line-height:1.55}
+#feed .hd{display:flex;justify-content:space-between;align-items:center;font-family:var(--body);margin-bottom:2px}
+#feed .hd h3{margin:0;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+#feed .ln{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src{display:inline-block;min-width:96px;color:var(--accent)}
+.bub{position:fixed;z-index:4;transform:translate(-50%,-100%);background:#f3e9dc;color:#1b1410;border-radius:10px;padding:3px 8px;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.bub.bad{background:var(--bad);color:#fff}
+.modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .box{background:#21180f;border:1px solid var(--line);border-radius:14px;max-width:760px;width:100%;max-height:90%;overflow:auto;padding:18px 20px}
+.modal h2{font-family:var(--disp);font-weight:600;margin:0 0 6px;font-size:24px}
+.modal p{color:var(--muted);line-height:1.5}
+.modal table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin:8px 0}
+.modal td,.modal th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right}.modal td:first-child,.modal th:first-child{text-align:left}
+.modal th{color:var(--muted);font-weight:600;font-size:12px}
+.modal pre{font-family:var(--mono);font-size:11px;white-space:pre-wrap;background:#140e0a;padding:10px;border-radius:8px;max-height:50vh;overflow:auto}
+#guest{position:fixed;z-index:7;left:50%;top:96px;transform:translateX(-50%);width:min(360px,calc(100vw - 32px));background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:10px 12px}
+#guest .x{float:right;background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;color:var(--muted);margin-top:4px}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.tog{display:none}
+@media (max-width:980px){#left,#right{display:none}#left.show,#right.show{display:block;top:auto;bottom:150px;max-height:45%}.tog{display:inline-block}#feed{font-size:10.5px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600&family=JetBrains+Mono&family=Playfair+Display:wght@600&display=swap">
+
+<div id="scene"></div>
+<div class="top">
+  <h1>Газлайт · цифровой двойник</h1>
+  <span id="clock">07:55</span>
+  <button class="btn primary" id="play" type="button">▶ Старт</button>
+  <span class="seg" id="speed" aria-label="Скорость"><button data-v="2" type="button">×2</button><button data-v="6" class="on" type="button">×6</button><button data-v="20" type="button">×20</button></span>
+  <span class="seg" id="daytype" aria-label="Тип дня"><button data-v="weekday" class="on" type="button">Будний</button><button data-v="weekend" type="button">Выходной</button></span>
+  <label class="sc"><input type="checkbox" id="scMorning">2-й бариста 8:00–10:30</label>
+  <label class="sc"><input type="checkbox" id="scPastry">+6 выпечки, поставка 14:00</label>
+  <label class="sc"><input type="checkbox" id="scLate">Вых.: смена до 18:00</label>
+  <button class="btn" id="restart" type="button">↺ Заново</button>
+  <button class="btn" id="results" type="button">Итоги дня</button>
+  <button class="btn tog" data-p="left" type="button">Процесс</button>
+  <button class="btn tog" data-p="right" type="button">KPI</button>
+</div>
+
+<aside class="panel" id="left">
+  <h3>Процесс BPMN · сейчас / за день</h3>
+  <div id="bpmn"></div>
+  <h3 style="margin-top:10px">Путь гостя CJM · эмоция</h3>
+  <div class="cjm" id="cjm"></div>
+  <div class="legend"><span><i style="background:var(--ok)"></i>доволен</span><span><i style="background:var(--warn)"></i>раздражён</span><span><i style="background:var(--bad)"></i>недоволен</span></div>
+  <h3 style="margin-top:10px">Сегменты RFM (кольцо над гостем)</h3>
+  <div class="legend" id="seglegend"></div>
+</aside>
+
+<aside class="panel" id="right">
+  <h3>KPI дня</h3>
+  <div class="kp" id="kpi"></div>
+  <h3 style="margin-top:10px">Заказы и SLA по часам</h3>
+  <canvas class="mini" id="chart" width="520" height="140"></canvas>
+  <h3 style="margin-top:8px">Склад · выпечка</h3>
+  <div id="stock"></div>
+  <canvas class="mini" id="stockChart" width="520" height="100" style="height:50px"></canvas>
+  <h3 style="margin-top:8px">Экономика дня</h3>
+  <div id="eco"></div>
+</aside>
+
+<section id="feed" aria-live="off">
+  <div class="hd"><h3>Данные рождаются на каждом шаге · источник</h3><button class="btn" id="logbtn" type="button" style="padding:3px 10px">Журнал дня</button></div>
+  <div id="lines"></div>
+</section>
+<div id="guest" hidden></div>
+<div class="modal" id="modal" hidden><div class="box" id="mbox"></div></div>
+
+<script src="vendor/three.min.js"></script>
+<script>// Движок «цифрового двойника» кофейни Газлайт. Время — минуты от 0:00.
+// Параметры откалиброваны по учебному набору (01.04–25.10.2026).
+(function (root) {
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const HOUR_WD = [11, 13, 8, 6, 7, 9, 8, 6, 6, 6, 5, 4, 3, 2], HOUR_WE = [3, 6, 10, 12, 12, 11, 10, 9, 8, 7, 5, 4, 3, 2];
+  const SEGMENTS = [['Чемпионы', .355], ['Лояльные', .208], ['Под угрозой ухода', .084], ['Новички', .081], ['Нуждаются во внимании', .064], ['Спящие', .208]];
+  const P = {
+    openMin: 8 * 60, closeMin: 22 * 60,
+    ordersPerDay: { weekday: 98, weekend: 122 },
+    pastryStock: { weekday: 12, weekend: 11 }, pastryProb: { weekday: .095, weekend: .115 },
+    extraPastry: 6, secondDeliveryAt: 14 * 60, pastryCost: 80, pastryPrice: 230,
+    checkTakeaway: 413, checkDineIn: 553, cogsShare: .226, wagePerHour: 350,
+    churnUplift: .07, futureValue: 1920, seats: 8, balkQueue: 5, balkProb: .5, payFail: .008, replaceAccept: .55, identified: .47, sla: 5,
+  };
+  function baristasAt(min, dayType, sc) {
+    let n = 1;
+    if (dayType === 'weekend' && min >= 600 && min < (sc.weekendLate ? 1080 : 960)) n = 2;
+    if (dayType === 'weekday' && sc.morningBarista && min >= 480 && min < 630) n = 2;
+    return n;
+  }
+  function staffHours(dayType, sc) { // кассир 14 ч + бариста 14 ч + доп. смены
+    let h = 28;
+    if (dayType === 'weekend') h += sc.weekendLate ? 8 : 6;
+    if (dayType === 'weekday' && sc.morningBarista) h += 2.5;
+    return h;
+  }
+
+  function createDay(opts) {
+    const dayType = opts.dayType || 'weekday', sc = Object.assign({ morningBarista: false, morePastry: false, weekendLate: false }, opts.scenario || {});
+    const R = rng(opts.seed || 1);
+    const w = dayType === 'weekend' ? HOUR_WE : HOUR_WD, ws = w.reduce((a, b) => a + b, 0);
+    // приходы гостей (Пуассон по часам)
+    const arrivals = [];
+    w.forEach((wh, i) => { const lam = P.ordersPerDay[dayType] * 1.04 * wh / ws; let k = 0, p = Math.exp(-lam), s = p, u = R(); while (u > s) { k++; p *= lam / k; s += p; }
+      for (let j = 0; j < k; j++) { let m = R() * 60; if (dayType === 'weekday' && i <= 1) m = i === 0 ? 15 + R() * 45 : R() * 55; arrivals.push(P.openMin + i * 60 + m); } });
+    arrivals.sort((a, b) => a - b);
+    let gid = 0;
+    const guests = arrivals.map((t) => {
+      const h = Math.floor(t / 60), morningWd = dayType === 'weekday' && h < 11;
+      const ident = R() < P.identified;
+      let seg = null; if (ident) { let u = R(), c = 0; for (const [n, p] of SEGMENTS) { c += p; if (u <= c) { seg = n; break; } } seg = seg || 'Спящие'; }
+      const dineP = (morningWd ? .25 : dayType === 'weekend' ? .55 : .42);
+      const dine = R() < dineP;
+      const items = 1 + (R() < (dine ? .6 : .3) ? 1 : 0) + (R() < (dine ? .2 : .05) ? 1 : 0);
+      const wantsPastry = R() < P.pastryProb[dayType] * (dine ? 1.3 : .8) * 1.1;
+      let prep = 0; for (let i = 0; i < items; i++) { const u = R(); prep += i === 0 ? 1.8 + R() * 1.0 : u < .45 ? .6 + R() * .7 : u < .85 ? 1.9 + R() * 1.1 : 3 + R() * 2; }
+      const check = (dine ? P.checkDineIn : P.checkTakeaway) * (.8 + R() * .4) + (wantsPastry ? P.pastryPrice : 0);
+      return { id: ++gid, order: 100000 + gid, t, dine, items, wantsPastry, prep, check: Math.round(check), seg, ident,
+        phase: 'outside', mood: 1, events: [], seatTime: 15 + R() * 30, rnd: R() };
+    });
+    const st = {
+      dayType, sc, t: P.openMin - 5, guests, queue: [], cashier: null, cashierFreeAt: 0, kitchen: [], baristas: [],
+      waiting: [], seated: [], stock: P.pastryStock[dayType], stockLog: [], delivered2: false,
+      log: [], counters: { arrived: 0, registered: 0, paid: 0, ready: 0, issued: 0, lostBalk: 0, lostStock: 0, lostPay: 0, noSeat: 0, replaced: 0 },
+      revenue: 0, waits: [], hourly: Array.from({ length: 14 }, () => ({ orders: 0, inSla: 0, withWait: 0, revenue: 0 })),
+      writeOff: 0, done: false, R,
+    };
+    st.stockLog.push([st.t, st.stock]);
+    return st;
+  }
+  const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.floor(m % 60)).padStart(2, '0');
+  function ev(st, g, step, source, text) { const r = { t: st.t, order: g ? g.order : null, step, source, text }; st.log.push(r); if (g) g.events.push(r); return r; }
+
+  function step(st, dt) {
+    if (st.done) return;
+    const end = st.t + dt;
+    while (st.t < end && !st.done) {
+      const tick = Math.min(.25, end - st.t); st.t += tick; const t = st.t; const R = st.R;
+      // поставки
+      if (st.sc.morePastry && !st.delivered2 && t >= P.secondDeliveryAt) { st.delivered2 = true; st.stock += P.extraPastry; ev(st, null, 'Склад', 'Склад', `Вторая поставка выпечки: +${P.extraPastry} шт.`); st.stockLog.push([t, st.stock]); }
+      // приходы
+      for (const g of st.guests) {
+        if (g.phase !== 'outside' || g.t > t) continue;
+        st.counters.arrived++;
+        if (st.queue.length >= P.balkQueue && R() < P.balkProb) { g.phase = 'left'; g.mood = 0; g.lost = 'очередь'; st.counters.lostBalk++; ev(st, g, 'C2', 'Хронометраж', 'Увидел очередь и ушёл без заказа'); continue; }
+        g.phase = 'queue'; g.qAt = t; st.queue.push(g); ev(st, g, 'C1→C2', 'Хронометраж', 'Пришёл, встал в очередь');
+      }
+      // касса: T01 → G01 → (T02) → T03/G03
+      if (st.cashier && t >= st.cashierFreeAt) {
+        const g = st.cashier; st.cashier = null;
+        if (g.payFailed) { g.phase = 'left'; g.mood = 0; g.lost = 'оплата'; st.counters.lostPay++; ev(st, g, 'T07', 'Эквайринг', 'Оплата не прошла, заказ отменён'); }
+        else if (g.cancelStock) { g.phase = 'left'; g.mood = 0; g.lost = 'выпечка'; st.counters.lostStock++; ev(st, g, 'T07', 'Касса', 'Нет выпечки, замену не принял — отмена'); }
+        else {
+          g.paidAt = t; st.counters.paid++; st.revenue += 0; g.phase = 'waitPrep'; st.kitchen.push(g); st.waiting.push(g);
+          ev(st, g, 'T03', 'Эквайринг', `Оплата ${g.check} ₽ прошла`);
+        }
+      }
+      if (!st.cashier && st.queue.length) {
+        const g = st.queue.shift(); st.cashier = g; g.phase = 'order'; st.counters.registered++;
+        const qWait = t - g.qAt; if (qWait > 4) g.mood = Math.min(g.mood, .5);
+        ev(st, g, 'T01', 'Касса', `Заказ #${g.order}: ${g.items} поз., ${g.dine ? 'в зале' : 'с собой'}${g.seg ? ', карта: ' + g.seg : ''}`);
+        let dur = 1.1 + R() * 1.0;
+        if (g.wantsPastry) {
+          if (st.stock > 0) { st.stock--; st.stockLog.push([t, st.stock]); ev(st, g, 'G01', 'Склад', `Выпечка есть, осталось ${st.stock} шт.`); }
+          else { dur += .5; g.mood = Math.min(g.mood, .5); ev(st, g, 'T02', 'Касса', 'Выпечки нет — предложили замену');
+            if (R() < P.replaceAccept) { st.counters.replaced++; g.check -= P.pastryPrice - 150; } else { g.cancelStock = true; } }
+        }
+        if (!g.cancelStock && R() < P.payFail) g.payFailed = true;
+        st.cashierFreeAt = t + dur;
+      }
+      // бар: T04 → T05
+      const nb = baristasAt(t, st.dayType, st.sc);
+      while (st.baristas.length < nb) st.baristas.push({ freeAt: t, cur: null });
+      st.baristas.forEach((b, i) => {
+        if (b.cur && t >= b.freeAt) { const g = b.cur; b.cur = null; g.readyAt = t; g.phase = 'pickup'; st.counters.ready++;
+          const wait = g.readyAt - g.paidAt; st.waits.push(wait); const hi = Math.min(13, Math.floor(g.paidAt / 60) - 8); const hr = st.hourly[hi]; hr.withWait++; if (wait <= P.sla) hr.inSla++;
+          if (wait > 8) g.mood = Math.min(g.mood, .2); else if (wait > P.sla) g.mood = Math.min(g.mood, .55);
+          ev(st, g, 'T05', 'Экран заказов', `Готово через ${wait.toFixed(1)} мин`); g.issueAt = t + .3 + R() * .6; }
+        if (!b.cur && i < nb && st.kitchen.length) { const g = st.kitchen.shift(); b.cur = g; g.phase = 'prep'; g.prepStart = t; b.freeAt = t + g.prep; ev(st, g, 'T04', 'Экран заказов', `Бариста ${i + 1} готовит`); }
+      });
+      if (st.baristas.length > nb) st.baristas = st.baristas.filter((b, i) => i < nb || b.cur);
+      // выдача T06, зал C5, уход C6
+      for (const g of st.waiting) {
+        if (g.phase === 'pickup' && t >= g.issueAt) {
+          g.phase = 'issued'; st.counters.issued++; st.revenue += g.check; const hi = Math.min(13, Math.floor(g.t / 60) - 8); st.hourly[hi].orders++; st.hourly[hi].revenue += g.check;
+          ev(st, g, 'T06', 'Экран заказов', `Выдан, ${g.check} ₽`);
+          if (g.dine) { if (st.seated.length < P.seats) { g.phase = 'seated'; g.leaveAt = t + g.seatTime; st.seated.push(g); ev(st, g, 'C5', 'Касса', 'Сел за стол'); }
+            else { g.phase = 'left'; g.mood = Math.min(g.mood, .4); st.counters.noSeat++; ev(st, g, 'C5', 'Опрос', 'Нет свободных мест — ушёл с заказом'); g.done = true; } }
+          else { g.phase = 'left'; g.done = true; }
+          if (g.phase === 'left') ev(st, g, 'C6', 'Опрос', g.mood >= .8 ? 'Доволен: оценка 5' : g.mood >= .5 ? 'Оценка 4' : 'Недоволен: оценка 2');
+        }
+        if (g.phase === 'seated' && t >= g.leaveAt) { g.phase = 'left'; g.done = true; st.seated = st.seated.filter((x) => x !== g); ev(st, g, 'C6', 'Опрос', g.mood >= .8 ? 'Доволен: оценка 5' : g.mood >= .5 ? 'Оценка 4' : 'Недоволен: оценка 2'); }
+      }
+      st.waiting = st.waiting.filter((g) => !g.done);
+      if (t >= P.closeMin && !st.queue.length && !st.cashier && !st.kitchen.length && st.baristas.every((b) => !b.cur) && !st.waiting.some((g) => g.phase !== 'seated')) {
+        st.writeOff = st.stock; if (st.stock > 0) ev(st, null, 'Склад', 'Склад', `Закрытие: списано ${st.stock} шт. выпечки`);
+        st.done = true;
+      }
+    }
+  }
+  function summary(st) {
+    const w = st.waits.slice().sort((a, b) => a - b), med = w.length ? w[Math.floor(w.length / 2)] : 0;
+    const c = st.counters, lost = c.lostBalk + c.lostStock + c.lostPay;
+    const issued = st.guests.filter((g) => g.phase === 'issued' || g.phase === 'seated' || (g.phase === 'left' && !g.lost));
+    const happy = issued.filter((g) => g.mood >= .5).length, unhappy = issued.length - happy + lost + c.noSeat;
+    const churnRisk = unhappy * P.churnUplift * P.futureValue;
+    const labor = staffHours(st.dayType, st.sc) * P.wagePerHour, writeOffCost = st.writeOff * P.pastryCost, cogs = st.revenue * P.cogsShare;
+    return { orders: c.issued, arrived: c.arrived, lost, lostBalk: c.lostBalk, lostStock: c.lostStock, lostPay: c.lostPay, noSeat: c.noSeat, replaced: c.replaced,
+      sla: w.length ? w.filter((x) => x <= P.sla).length / w.length : 0, median: med, p90: w.length ? w[Math.floor(w.length * .9)] : 0,
+      revenue: st.revenue, avgCheck: c.issued ? st.revenue / c.issued : 0, csat: issued.length ? happy / issued.length : 0,
+      writeOff: st.writeOff, writeOffCost, labor, cogs, result: st.revenue - cogs - writeOffCost - labor, unhappy, churnRisk,
+      resultWithChurn: st.revenue - cogs - writeOffCost - labor - churnRisk };
+  }
+  function runDay(opts) { const st = createDay(opts); while (!st.done && st.t < 26 * 60) step(st, 5); return summary(st); }
+  root.GaslightTwin = { createDay, step, summary, runDay, baristasAt, hhmm, P, SEGMENTS };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+const T = window.GaslightTwin, P = T.P;
+const RU = new Intl.NumberFormat('ru-RU');
+const money = (v) => RU.format(Math.round(v)) + ' ₽', pct = (v) => (v * 100).toFixed(0) + ' %';
+const SEGCOL = {'Чемпионы':0xf2c14e,'Лояльные':0x7fb3d5,'Под угрозой ухода':0xe4705a,'Новички':0x8fc78a,'Нуждаются во внимании':0xc39bd3,'Спящие':0x8d8d8d};
+const FORECAST = {weekday: 49400, weekend: 67300}; // средняя выручка дня по учебному набору
+document.getElementById('seglegend').innerHTML = Object.entries(SEGCOL).map(([n,c]) => `<span><i style="background:#${c.toString(16).padStart(6,'0')}"></i>${n}</span>`).join('');
+
+// ---------- сцена ----------
+const W = () => innerWidth, H = () => innerHeight;
+const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(W(),H()); renderer.shadowMap.enabled = true; renderer.outputEncoding = THREE.sRGBEncoding;
+document.getElementById('scene').appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x17110d); scene.fog = new THREE.Fog(0x17110d, 16, 34);
+const cam = new THREE.PerspectiveCamera(50, W()/H(), .1, 100);
+const M = (c,r=.8,m=0) => new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+const box = (w,h,d,mat,x,y,z) => { const g = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); g.position.set(x,y,z); g.castShadow = g.receiveShadow = true; scene.add(g); return g; };
+const cyl = (a,b,h,mat,x,y,z,s=20) => { const g = new THREE.Mesh(new THREE.CylinderGeometry(a,b,h,s),mat); g.position.set(x,y,z); g.castShadow = g.receiveShadow = true; scene.add(g); return g; };
+const wood = M(0x6b4a33), dark = M(0x3a2a20), wallR = M(0x8c3f2e,.95), wallL = M(0xd9c9b0,.95), brass = M(0xb8893a,.35,.8), steel = M(0x9aa3a8,.3,.9), glass = new THREE.MeshStandardMaterial({color:0xcfe6ef,transparent:true,opacity:.25,roughness:.05});
+const ft = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); for (let i=0;i<8;i++) for (let j=0;j<8;j++){ x.fillStyle = (i+j)%2 ? '#2b2420' : '#d8cdbb'; x.fillRect(i*32,j*32,32,32); } const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5,7); return t; })();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(10,15), new THREE.MeshStandardMaterial({map:ft,roughness:.7})); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+const street = new THREE.Mesh(new THREE.PlaneGeometry(14,5), M(0x2d2f33,.95)); street.rotation.x = -Math.PI/2; street.position.set(0,-.01,10); scene.add(street);
+box(10,3.6,.2,wallR,0,1.8,-7.5); box(.2,3.6,15,wallL,-5,1.8,0); box(.2,3.6,15,wallL,5,1.8,0);
+box(3.6,1.2,.2,wallR,-3.2,.6,7.5); box(3.6,1.2,.2,wallR,3.2,.6,7.5); box(.1,1.6,3,glass,4.94,1.9,3.5);
+const signC = document.createElement('canvas'); signC.width = 512; signC.height = 128; const sx = signC.getContext('2d'); sx.fillStyle = '#17110d'; sx.fillRect(0,0,512,128); sx.font = 'italic 600 72px Georgia'; sx.fillStyle = '#ffcf8a'; sx.shadowColor = '#ff9d3c'; sx.shadowBlur = 24; sx.textAlign = 'center'; sx.fillText('The Gaslight',256,88);
+const sign = new THREE.Mesh(new THREE.PlaneGeometry(3,.75), new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(signC)})); sign.position.set(0,2.9,-7.38); scene.add(sign);
+box(7,1.05,.9,wood,.2,.52,-2.3); box(7.2,.08,1.05,dark,.2,1.08,-2.3); box(9.6,.9,.7,wood,0,.45,-6.9);
+box(1.3,.7,.6,steel,-2.6,1.47,-2.4); box(1.3,.08,.6,brass,-2.6,1.86,-2.4); cyl(.12,.12,.35,dark,-1.7,1.3,-2.4);
+box(.5,.3,.4,M(0x222222,.4),-.4,1.27,-2.3); box(.45,.28,.03,M(0x5fb3c9,.2,.1),-.4,1.5,-2.45);
+box(1.6,.6,.8,glass,1.6,1.42,-2.3); box(1.6,.04,.8,brass,1.6,1.73,-2.3); box(.9,.05,.5,brass,2.9,1.13,-2.3);
+const pastries = []; for (let i=0;i<18;i++){ const c = new THREE.Mesh(new THREE.TorusGeometry(.07,.04,8,14,Math.PI), M(0xd59a4a,.6)); c.position.set(.95+(i%6)*.26, i<6?1.2:i<12?1.38:1.56, -2.3+(i<6?.2:i<12?0:-.2)); c.rotation.x = -Math.PI/2; scene.add(c); pastries.push(c); }
+const SEATS = [];
+[[2.6,1.8],[2.6,4.4],[-1,3.2],[-1,5.8]].forEach(([x,z]) => { cyl(.45,.45,.05,wood,x,.75,z); cyl(.05,.05,.72,dark,x,.37,z,10); [-.75,.75].forEach(dx => { box(.42,.05,.42,dark,x+dx,.46,z); SEATS.push([x+dx*1.05,z]); }); });
+box(.4,2.4,2.4,wood,-4.75,1.2,2.2); const bc = [0x8c3f2e,0x2f5d62,0xd9a441,0x5a3d5c,0x3b6e3a]; for (let s=0;s<4;s++) for (let b=0;b<10;b++) box(.3,.4,.16,M(bc[(b+s)%5]),-4.62,.52+s*.6,1.2+b*.21);
+scene.add(new THREE.HemisphereLight(0xffe2c0,0x2a1d14,.6));
+const key = new THREE.PointLight(0xffc27a,1.1,20,2); key.position.set(0,3.4,0); key.castShadow = true; scene.add(key);
+const bl = new THREE.PointLight(0xffb060,.9,9,2); bl.position.set(0,2.6,-3.5); scene.add(bl);
+const hl = new THREE.PointLight(0xffd29a,.7,10,2); hl.position.set(1,2.5,4); scene.add(hl);
+const sun = new THREE.DirectionalLight(0x9fc4ff,.3); sun.position.set(9,6,8); scene.add(sun);
+
+// люди
+const MOODC = (m) => m >= .8 ? 0x8fc78a : m >= .5 ? 0xe9c46a : 0xe4705a;
+function person(color, ring){ const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.17,.22,.95,12), M(color,.7)); body.position.y = .55; body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.15,14,12), M(0xe8c9a8,.8)); head.position.y = 1.18; head.castShadow = true;
+  g.add(body, head);
+  if (ring != null){ const r = new THREE.Mesh(new THREE.TorusGeometry(.17,.03,8,20), new THREE.MeshBasicMaterial({color:ring})); r.rotation.x = Math.PI/2; r.position.y = 1.45; g.add(r); }
+  g.userData.body = body; scene.add(g); return g; }
+const staff = { cashier: person(0x2b2b2b), baristas: [person(0x3b2a20), person(0x3b2a20)], courier: person(0x2f6db3) };
+staff.cashier.position.set(-.4,0,-3.1); staff.baristas[0].position.set(-2.6,0,-3.2); staff.baristas[1].position.set(-1.5,0,-3.2); staff.baristas[1].visible = false; staff.courier.visible = false;
+
+const CASH = [-.4,-1.35], PICK = [2.9,-1.35], DOOR = [0,7.1], OUT = [0,9.5];
+const qPos = (i) => i < 6 ? [-.4, -.7 + i*.6] : [-1.1 - (i-6)*.6, 2.9];
+const waitPos = (k) => [2.2 + (k%4)*.45, -.6 + Math.floor(k/4)*.5];
+
+// ---------- состояние ----------
+let dayType = 'weekday', speed = 6, running = false, st = null, agents = new Map(), seatOf = new Map(), seed = 20261030, logShown = 0, bubbles = [];
+const scenario = () => ({morningBarista: scMorning.checked, morePastry: scPastry.checked, weekendLate: scLate.checked});
+function reset(){
+  agents.forEach(a => scene.remove(a.obj)); agents.clear(); seatOf.clear(); bubbles.forEach(b => b.el.remove()); bubbles = [];
+  st = T.createDay({seed, dayType, scenario: scenario()}); logShown = 0; document.getElementById('lines').replaceChildren(); courier = null;
+  running = false; playBtn.textContent = '▶ Старт'; guestCard.hidden = true; selected = null; draw();
+}
+const playBtn = document.getElementById('play'), scMorning = document.getElementById('scMorning'), scPastry = document.getElementById('scPastry'), scLate = document.getElementById('scLate');
+playBtn.onclick = () => { if (st.done){ reset(); } running = !running; playBtn.textContent = running ? '❚❚ Пауза' : '▶ Продолжить'; };
+document.querySelectorAll('#speed button').forEach(b => b.onclick = () => { speed = +b.dataset.v; document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b)); });
+document.querySelectorAll('#daytype button').forEach(b => b.onclick = () => { dayType = b.dataset.v; document.querySelectorAll('#daytype button').forEach(x => x.classList.toggle('on', x === b)); reset(); });
+[scMorning, scPastry, scLate].forEach(c => c.onchange = () => { st.sc = scenario(); });
+document.getElementById('restart').onclick = () => { seed++; reset(); };
+document.getElementById('results').onclick = showResults;
+document.querySelectorAll('.tog').forEach(b => b.onclick = () => document.getElementById(b.dataset.p).classList.toggle('show'));
+
+// ---------- агенты ----------
+let courier = null;
+function targetFor(g){
+  switch (g.phase){
+    case 'queue': { const i = st.queue.indexOf(g); return qPos(Math.max(0,i)); }
+    case 'order': return CASH;
+    case 'waitPrep': case 'prep': { const k = st.waiting.filter(x => x.phase === 'waitPrep' || x.phase === 'prep').indexOf(g); return waitPos(Math.max(0,k)); }
+    case 'pickup': return PICK;
+    case 'seated': { if (!seatOf.has(g.id)){ const used = new Set(seatOf.values()); let s = SEATS.findIndex((_,i) => !used.has(i)); seatOf.set(g.id, s < 0 ? 0 : s); } return SEATS[seatOf.get(g.id)]; }
+    case 'left': return null;
+    default: return DOOR;
+  }
+}
+function syncAgents(){
+  for (const g of st.guests){
+    if (g.phase === 'outside') continue;
+    let a = agents.get(g.id);
+    if (!a){ const obj = person(MOODC(g.mood), g.seg ? SEGCOL[g.seg] : null); obj.position.set(OUT[0] + (Math.random()-.5)*2, 0, OUT[1]); obj.userData.gid = g.id; a = {obj, g, path:[DOOR], leaving:false}; agents.set(g.id, a); }
+    a.obj.userData.body.material.color.setHex(MOODC(g.mood));
+    if (g.phase === 'left' && !a.leaving){ a.leaving = true; seatOf.delete(g.id); a.path = [DOOR, OUT]; }
+    if (!a.leaving){ const t = targetFor(g); if (t) a.path = a.obj.position.z > 6.8 ? [DOOR, t] : [t]; }
+  }
+}
+const dist = (p, t) => Math.hypot(p.x - t[0], p.z - t[1]);
+function moveAgents(dtSim){
+  const sp = 25 * dtSim; // метров за минуту модели
+  agents.forEach((a, id) => {
+    let budget = sp;
+    while (budget > 0 && a.path.length){ const t = a.path[0], d = dist(a.obj.position, t); if (d < .02){ a.path.shift(); continue; }
+      const k = Math.min(1, budget / d); a.obj.position.x += (t[0]-a.obj.position.x)*k; a.obj.position.z += (t[1]-a.obj.position.z)*k; a.obj.rotation.y = Math.atan2(t[0]-a.obj.position.x, t[1]-a.obj.position.z); budget -= d*k; if (k === 1) a.path.shift(); }
+    if (a.leaving && !a.path.length){ scene.remove(a.obj); agents.delete(id); if (selected === id){ guestCard.hidden = true; selected = null; } }
+  });
+}
+function bubble(gid, text, bad){ const a = agents.get(gid); if (!a) return; const el = document.createElement('div'); el.className = 'bub' + (bad ? ' bad' : ''); el.textContent = text; document.body.appendChild(el); bubbles.push({el, gid, ttl: 2.2}); }
+
+// ---------- отрисовка панелей ----------
+const STEPS = [['C1–C2','Очередь к кассе', g => g.phase === 'queue'],['T01–T03','Касса: заказ и оплата', g => g.phase === 'order'],['T04','Готовят', g => g.phase === 'prep' || g.phase === 'waitPrep'],['T05–T06','Готово, забирают', g => g.phase === 'pickup'],['C5','Сидят в зале', g => g.phase === 'seated']];
+function draw(){
+  document.getElementById('clock').textContent = T.hhmm(Math.max(st.t, P.openMin - 5));
+  const c = st.counters, nb = T.baristasAt(st.t, st.dayType, st.sc);
+  staff.baristas[1].visible = nb > 1;
+  const live = STEPS.map(([id, n, f]) => `<div class="row"><span class="id">${id}</span><span class="t">${n}</span><b>${st.guests.filter(f).length}</b></div>`).join('');
+  const tot = [['T01','Зарегистрировано', c.registered],['G03','Оплачено', c.paid],['T06 · E02','Выдано', c.issued],['T02','Приняли замену', c.replaced],['T07','Потеряно: нет выпечки', c.lostStock],['T07','Потеряно: оплата', c.lostPay],['C2','Ушли из-за очереди', c.lostBalk],['C5','Не нашли места', c.noSeat]]
+    .map(([id,n,v]) => `<div class="row"><span class="id">${id}</span><span class="t">${n}</span><b class="${/Потеряно|Ушли|места/.test(n) && v ? 'bad' : ''}">${v}</b></div>`).join('');
+  document.getElementById('bpmn').innerHTML = live + `<div class="row"><span class="id">ресурс</span><span class="t">Бариста на смене</span><b class="${nb>1?'good':''}">${nb}</b></div>` + tot;
+  // CJM: средняя эмоция гостей на этапе (текущие) или накопленная
+  const by = (f) => { const a = st.guests.filter(f); return a.length ? a.reduce((s,g) => s + g.mood, 0) / a.length : null; };
+  const cj = [['C1','Поиск', by(g => g.phase !== 'outside')],['C2','Выбор', by(g => g.phase === 'queue' || g.lost === 'очередь' || g.lost === 'выпечка')],['C3','Оплата', by(g => g.paidAt != null || g.lost === 'оплата')],['C4','Ожидание', by(g => g.readyAt != null || g.phase === 'prep' || g.phase === 'waitPrep')],['C5','Опыт', by(g => g.phase === 'seated' || g.phase === 'issued' || (g.phase === 'left' && !g.lost))],['C6','Повтор', by(g => g.phase === 'left')]];
+  document.getElementById('cjm').innerHTML = cj.map(([id,n,m]) => `<div style="border-top-color:${m == null ? 'var(--line)' : '#' + MOODC(m).toString(16)}">${id}<small>${n}</small><small>${m == null ? '—' : Math.round(m*100)}</small></div>`).join('');
+  const s = T.summary(st);
+  document.getElementById('kpi').innerHTML = [
+    [RU.format(s.orders), 'заказов выдано'], [money(s.revenue), 'выручка'], [money(s.avgCheck), 'средний чек'],
+    [`<span class="${s.sla >= .7 ? 'good' : s.sla >= .55 ? 'warn' : 'bad'}">${st.waits.length ? pct(s.sla) : '—'}</span>`, 'готово за 5 мин'],
+    [st.waits.length ? s.median.toFixed(1) + ' мин' : '—', 'медиана ожидания'], [`<span class="${s.csat >= .85 ? 'good' : 'warn'}">${s.orders ? pct(s.csat) : '—'}</span>`, 'довольных (CSAT)']
+  ].map(([v,l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('');
+  drawChart(); drawStock(s);
+  const progress = Math.min(1, Math.max(0, (st.t - P.openMin) / (P.closeMin - P.openMin)));
+  document.getElementById('eco').innerHTML = [
+    ['Прогноз выручки дня', money(FORECAST[st.dayType])], ['Факт к этому часу', money(s.revenue)], ['План к этому часу', money(FORECAST[st.dayType] * progress)],
+    ['Себестоимость (22,6 %)', '−' + money(s.cogs)], ['Списания выпечки', '−' + money(st.done ? s.writeOffCost : 0)], ['ФОТ смены', '−' + money(s.labor * progress)],
+    ['Результат дня', money(s.revenue - s.cogs - (st.done ? s.writeOffCost : 0) - s.labor * progress)]
+  ].map(([n,v],i) => `<div class="row"><span class="t">${n}</span><b class="${i === 6 ? 'good' : ''}">${v}</b></div>`).join('');
+}
+function drawChart(){
+  const cv = document.getElementById('chart'), x = cv.getContext('2d'), w = cv.width, h = cv.height; x.clearRect(0,0,w,h);
+  const mx = Math.max(16, ...st.hourly.map(r => r.orders)), bw = w / 14;
+  st.hourly.forEach((r, i) => { const bh = (r.orders / mx) * (h - 24); const sla = r.withWait ? r.inSla / r.withWait : null;
+    x.fillStyle = sla == null ? '#4a3a2e' : sla >= .7 ? '#8fc78a' : sla >= .5 ? '#e9c46a' : '#e4705a'; x.fillRect(i*bw + 3, h - 16 - bh, bw - 6, bh);
+    if (i % 2 === 0){ x.fillStyle = '#bba994'; x.font = '18px Inter Tight, sans-serif'; x.fillText(String(8+i), i*bw + 4, h - 1); } });
+}
+function drawStock(s){
+  document.getElementById('stock').innerHTML = `<div class="row"><span class="t">На витрине сейчас</span><b class="${st.stock ? '' : 'bad'}">${st.stock} шт.</b></div><div class="row"><span class="t">Отказов из-за наличия</span><b class="${st.counters.lostStock ? 'bad' : ''}">${st.counters.lostStock}</b></div>`;
+  pastries.forEach((p, i) => p.visible = i < st.stock);
+  const cv = document.getElementById('stockChart'), x = cv.getContext('2d'), w = cv.width, h = cv.height; x.clearRect(0,0,w,h);
+  const X = (t) => (t - P.openMin) / (P.closeMin - P.openMin) * w, Y = (v) => h - 6 - v / 20 * (h - 12);
+  x.strokeStyle = '#e0a458'; x.lineWidth = 3; x.beginPath(); st.stockLog.forEach(([t,v],i) => { const px = X(Math.max(P.openMin,t)); i ? x.lineTo(px, Y(v)) : x.moveTo(px, Y(v)); }); x.lineTo(X(Math.min(st.t, P.closeMin)), Y(st.stock)); x.stroke();
+}
+function pushLog(){
+  const box = document.getElementById('lines');
+  for (; logShown < st.log.length; logShown++){
+    const e = st.log[logShown];
+    const notable = /ушёл|отмена|Нет выпечки|не прошла|Нет свободных|Недоволен/.test(e.text) || (/Готово через/.test(e.text) && parseFloat(e.text.match(/[\d.]+/)) > 8);
+    if (e.order != null){ const g = st.guests.find(x => x.order === e.order); if (g && notable) bubble(g.id, e.text.replace(/^Заказ #\d+: /,''), true); if (g && e.step === 'T05' && !notable && Math.random() < .25) bubble(g.id, e.text); }
+    const ln = document.createElement('div'); ln.className = 'ln' + (notable ? ' bad' : '');
+    ln.innerHTML = `${T.hhmm(e.t)} <span class="src">[${e.source}]</span> ${e.step} · ${e.order ? '#' + e.order + ' ' : ''}`; ln.append(e.text);
+    box.prepend(ln); while (box.children.length > 5) box.lastChild.remove();
+  }
+}
+
+// ---------- карточка гостя ----------
+const guestCard = document.getElementById('guest'); let selected = null;
+function showGuest(gid){ const g = st.guests.find(x => x.id === gid); if (!g) return; selected = gid;
+  guestCard.innerHTML = '';
+  const x = document.createElement('button'); x.className = 'x'; x.textContent = '×'; x.onclick = () => { guestCard.hidden = true; selected = null; };
+  const h = document.createElement('h3'); h.style.cssText = 'margin:0 0 4px;font-family:var(--disp);font-size:18px'; h.textContent = `Гость #${g.order}`;
+  const meta = document.createElement('div'); meta.style.color = 'var(--muted)'; meta.textContent = `${g.dine ? 'В зале' : 'С собой'} · ${g.items} поз. · ${g.check} ₽ · ${g.seg ? 'карта: ' + g.seg : 'без карты'}${g.wantsPastry ? ' · хочет выпечку' : ''}`;
+  const ul = document.createElement('div'); ul.style.cssText = 'margin-top:6px;font-family:var(--mono);font-size:11px;line-height:1.6';
+  g.events.forEach(e => { const r = document.createElement('div'); r.textContent = `${T.hhmm(e.t)} ${e.step} [${e.source}] ${e.text}`; ul.appendChild(r); });
+  guestCard.append(x, h, meta, ul); guestCard.hidden = false; }
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (e) => { ndc.set(e.clientX/W()*2-1, -(e.clientY/H())*2+1); ray.setFromCamera(ndc, cam);
+  const objs = []; agents.forEach(a => a.obj.traverse(o => { if (o.isMesh) objs.push(o); }));
+  const hit = ray.intersectObjects(objs)[0]; if (hit){ let o = hit.object; while (o && o.userData.gid == null) o = o.parent; if (o) showGuest(o.userData.gid); } });
+
+// ---------- итоги дня ----------
+function showResults(){
+  const base = T.runDay({seed, dayType, scenario:{}}), cur = T.runDay({seed, dayType, scenario: scenario()});
+  const isBase = !scMorning.checked && !scPastry.checked && !scLate.checked;
+  const rows = [['Заказов выдано', 'orders', v => RU.format(v)], ['Потеряно гостей (очередь, выпечка, оплата)', 'lost', v => RU.format(v)], ['Готово за 5 мин', 'sla', pct], ['Медиана ожидания, мин', 'median', v => v.toFixed(1)], ['P90 ожидания, мин', 'p90', v => v.toFixed(1)], ['Довольных гостей', 'csat', pct], ['Выручка', 'revenue', money], ['Списано выпечки, шт.', 'writeOff', v => RU.format(v)], ['ФОТ', 'labor', money], ['Результат дня', 'result', money], ['Будущая выручка под риском (оценка)', 'churnRisk', money], ['Результат с учётом удержания', 'resultWithChurn', money]];
+  const b = document.getElementById('mbox');
+  b.innerHTML = `<h2>Итоги дня: ${dayType === 'weekday' ? 'будний' : 'выходной'} день</h2><p>Тот же поток гостей (seed ${seed}), прогнанный дважды: без изменений и с выбранными сценариями. Ставка ФОТ 350 ₽/ч, себестоимость выпечки 80 ₽ — учебные допущения. «Под риском»: недовольный гость на 7 п.п. реже возвращается (опрос: 78 % против 85 %), ценность гостя за месяц — 4 визита × 480 ₽.</p>`;
+  const t = document.createElement('table'); t.innerHTML = `<tr><th>Показатель</th><th>База</th><th>${isBase ? 'Сценарии не выбраны' : 'Сценарий'}</th><th>Δ</th></tr>` +
+    rows.map(([n,k,f]) => { const d = cur[k] - base[k]; const good = ['lost','median','p90','writeOff','labor','churnRisk'].includes(k) ? d < 0 : d > 0;
+      return `<tr><td>${n}</td><td>${f(base[k])}</td><td>${f(cur[k])}</td><td class="${Math.abs(d) < 1e-6 ? '' : good ? 'good' : 'bad'}">${Math.abs(d) < 1e-6 ? '—' : (d > 0 ? '+' : '') + (k === 'sla' || k === 'csat' ? (d*100).toFixed(0) + ' п.п.' : f(d).replace(' ₽',' ₽'))}</td></tr>`; }).join('');
+  b.appendChild(t);
+  const p = document.createElement('p'); p.innerHTML = 'По 30 смоделированным дням: второй бариста в будни 8:00–10:30 даёт +594 ₽/день с учётом удержания (SLA 59 % → 72 %); дополнительная выпечка окупается только в выходные (+1 297 ₽/день); продление смены в выходные до 18:00 не окупается (−179 ₽/день).'; b.appendChild(p);
+  const close = document.createElement('button'); close.className = 'btn primary'; close.textContent = 'Закрыть'; close.onclick = () => modal.hidden = true; b.appendChild(close);
+  modal.hidden = false;
+}
+const modal = document.getElementById('modal'); modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+document.getElementById('logbtn').onclick = () => {
+  const csv = 'time;order;step;source;text\n' + st.log.map(e => [T.hhmm(e.t), e.order ?? '', e.step, e.source, '"' + e.text.replace(/"/g,'""') + '"'].join(';')).join('\n');
+  const b = document.getElementById('mbox'); b.innerHTML = `<h2>Журнал дня — сырые данные</h2><p>${st.log.length} событий. Это тот же формат, что приходит из кассы, эквайринга, экрана заказов и склада; дальше его очищает ETL (этап 3).</p>`;
+  const pre = document.createElement('pre'); pre.textContent = csv.split('\n').slice(0, 400).join('\n'); const cp = document.createElement('button'); cp.className = 'btn primary'; cp.textContent = 'Скопировать CSV';
+  cp.onclick = () => navigator.clipboard.writeText(csv).then(() => cp.textContent = 'Скопировано', () => { const r = document.createRange(); r.selectNodeContents(pre); getSelection().removeAllRanges(); getSelection().addRange(r); cp.textContent = 'Выделено — Ctrl+C'; });
+  const close = document.createElement('button'); close.className = 'btn'; close.textContent = 'Закрыть'; close.style.marginLeft = '8px'; close.onclick = () => modal.hidden = true;
+  b.append(pre, cp, close); modal.hidden = false; };
+
+// ---------- камера ----------
+let yaw = 0, pitch = -.72, radius = 15.5, tgt = new THREE.Vector3(0,0,1.2), drag = null;
+renderer.domElement.addEventListener('pointerdown', e => drag = {x:e.clientX, y:e.clientY});
+addEventListener('pointerup', () => drag = null);
+addEventListener('pointermove', e => { if (!drag) return; yaw -= (e.clientX - drag.x)*.005; pitch = Math.max(-1.35, Math.min(-.2, pitch - (e.clientY - drag.y)*.004)); drag = {x:e.clientX, y:e.clientY}; });
+renderer.domElement.addEventListener('wheel', e => { radius = Math.max(6, Math.min(24, radius + e.deltaY*.01)); e.preventDefault(); }, {passive:false});
+addEventListener('resize', () => { renderer.setSize(W(),H()); cam.aspect = W()/H(); cam.updateProjectionMatrix(); });
+
+// ---------- цикл ----------
+const clk = new THREE.Clock(), tmp = new THREE.Vector3(); let acc = 0;
+function frame(){
+  const dt = Math.min(clk.getDelta(), .1);
+  if (running && !st.done){ const dSim = dt * speed; T.step(st, dSim); syncAgents(); moveAgents(dSim); pushLog();
+    // курьер: поставка утром и в 14:00
+    if (st.t < P.openMin + 4 || (st.sc.morePastry && st.t >= P.secondDeliveryAt && st.t < P.secondDeliveryAt + 5)){ staff.courier.visible = true; const k = ((st.t % 5) / 5); staff.courier.position.set(1.6, 0, OUT[1] - (OUT[1] + 1.2) * Math.sin(k*Math.PI)); } else staff.courier.visible = false;
+    acc += dt; if (acc > .2){ acc = 0; draw(); if (selected) showGuest(selected); }
+    if (st.done){ running = false; playBtn.textContent = '▶ Новый день'; draw(); showResults(); } }
+  else if (running) moveAgents(dt * speed);
+  cam.position.set(tgt.x + radius*Math.cos(pitch)*Math.sin(yaw), tgt.y - radius*Math.sin(pitch), tgt.z + radius*Math.cos(pitch)*Math.cos(yaw)); cam.lookAt(tgt);
+  renderer.render(scene, cam);
+  bubbles = bubbles.filter(b => { b.ttl -= dt; const a = agents.get(b.gid); if (b.ttl <= 0 || !a){ b.el.remove(); return false; }
+    tmp.set(a.obj.position.x, 1.75, a.obj.position.z).project(cam); b.el.style.left = ((tmp.x+1)/2*W()) + 'px'; b.el.style.top = ((1-tmp.y)/2*H()) + 'px'; return true; });
+  requestAnimationFrame(frame);
+}
+reset(); frame();
+</script>
+
+</html>
