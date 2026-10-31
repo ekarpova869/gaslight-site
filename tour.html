@@ -113,7 +113,7 @@ const floorTex = (() => { const c = document.createElement('canvas'); c.width = 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(10,15), new THREE.MeshStandardMaterial({map:floorTex, roughness:.7})); floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
 box(10,3.6,.2,wall,0,1.8,-7.5); box(.2,3.6,15,wall2,-5,1.8,0); box(.2,3.6,15,wall2,5,1.8,0);
 box(3.6,3.6,.2,wall,-3.2,1.8,7.5); box(3.6,3.6,.2,wall,3.2,1.8,7.5); box(2.8,.8,.2,wall,0,3.2,7.5);
-box(1.4,2.6,.08,M(0x2b3a2e,.5),0,1.3,7.52); box(.08,.3,.04,brass,.5,1.2,7.45);   // дверь
+box(.08,2.6,1.4,M(0x2b3a2e,.5),.74,1.3,8.22); box(.04,.3,.08,brass,.79,1.2,8.75);   // дверь открыта наружу, стоит ребром у правого косяка
 box(.1,1.6,3,glass,4.94,1.9,3.5);                                                  // окно
 // неоновая вывеска
 const signC = document.createElement('canvas'); signC.width = 512; signC.height = 128; const sx = signC.getContext('2d');
