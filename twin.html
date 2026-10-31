@@ -8,7 +8,7 @@
 [hidden]{display:none!important}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;font-size:13px}
 #scene{position:fixed;inset:0}
-canvas{display:block}
+canvas{display:block;touch-action:none}
 .top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:6;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(var(--bg) 60%,transparent)}
 .top h1{font-family:var(--disp);font-weight:600;font-size:20px;margin:0 6px 0 0}
 #clock{font-family:var(--mono);font-size:22px;color:var(--accent);min-width:64px;font-variant-numeric:tabular-nums}
@@ -294,24 +294,44 @@ const sun = new THREE.DirectionalLight(0x9fc4ff,.3); sun.position.set(9,6,8); sc
 
 // люди
 const MOODC = (m) => m >= .8 ? 0x8fc78a : m >= .5 ? 0xe9c46a : 0xe4705a;
+// геометрия и материалы общие для всех людей; своё у человека только тело (меняет цвет по настроению)
+const GEO = {body: new THREE.CylinderGeometry(.17,.22,.95,12), head: new THREE.SphereGeometry(.15,14,12), ring: new THREE.TorusGeometry(.17,.03,8,20)};
+const HEAD_MAT = M(0xe8c9a8,.8), RING_MAT = {};
 function person(color, ring){ const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(.17,.22,.95,12), M(color,.7)); body.position.y = .55; body.castShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.15,14,12), M(0xe8c9a8,.8)); head.position.y = 1.18; head.castShadow = true;
+  const body = new THREE.Mesh(GEO.body, M(color,.7)); body.position.y = .55; body.castShadow = true;
+  const head = new THREE.Mesh(GEO.head, HEAD_MAT); head.position.y = 1.18; head.castShadow = true;
   g.add(body, head);
-  if (ring != null){ const r = new THREE.Mesh(new THREE.TorusGeometry(.17,.03,8,20), new THREE.MeshBasicMaterial({color:ring})); r.rotation.x = Math.PI/2; r.position.y = 1.45; g.add(r); }
+  if (ring != null){ const r = new THREE.Mesh(GEO.ring, RING_MAT[ring] || (RING_MAT[ring] = new THREE.MeshBasicMaterial({color:ring}))); r.rotation.x = Math.PI/2; r.position.y = 1.45; g.add(r); }
   g.userData.body = body; scene.add(g); return g; }
+function removePerson(obj){ scene.remove(obj); obj.userData.body.material.dispose(); }
 const staff = { cashier: person(0x2b2b2b), baristas: [person(0x3b2a20), person(0x3b2a20)], courier: person(0x2f6db3) };
 staff.cashier.position.set(-.4,0,-3.1); staff.baristas[0].position.set(-2.6,0,-3.2); staff.baristas[1].position.set(-1.5,0,-3.2); staff.baristas[1].visible = false; staff.courier.visible = false;
 
 const CASH = [-.4,-1.35], PICK = [2.9,-1.35], DOOR = [0,7.1], OUT = [0,9.5];
-const qPos = (i) => i < 6 ? [-.4, -.7 + i*.6] : [-1.1 - (i-6)*.6, 2.9];
-const waitPos = (k) => [2.2 + (k%4)*.45, -.6 + Math.floor(k/4)*.5];
+// очередь: первый у кассы, остальные по свободному проходу x = 0,55 к двери (столы стоят на x = −1 и x = 2,6)
+const AISLE = .55, HALL = 1.4;
+const qPos = (i) => i === 0 ? [-.4, -.7] : [AISLE, -.5 + Math.min(i - 1, 11) * .55];
+// ожидание у стойки выдачи: 5 × 3 места, дальше — у правой стены
+const waitPos = (k) => k < 15 ? [1.9 + (k%5)*.4, -.75 + Math.floor(k/5)*.42] : [4.3, -.7 + (k-15)*.4];
+// маршрут между зонами: через проход, чтобы не идти сквозь столы
+const atSeat = (x, z) => SEATS.some(s => Math.hypot(s[0] - x, s[1] - z) < .3);
+function route(p, t){
+  const pts = []; let x = p.x, z = p.z;
+  const fromSeat = atSeat(x, z), toSeat = atSeat(t[0], t[1]);
+  if (fromSeat){ z += .65; pts.push([x, z]); }                 // отойти от стула
+  const tz = toSeat ? t[1] + .65 : t[1];
+  const bothInQueue = Math.abs(x - AISLE) < .05 && Math.abs(t[0] - AISLE) < .05;
+  if (fromSeat || toSeat || (Math.max(z, tz) > .6 && Math.abs(x - t[0]) > .3 && !bothInQueue)){
+    pts.push([HALL, z], [HALL, tz]); if (toSeat) pts.push([t[0], tz]);
+  }
+  pts.push(t); return pts;
+}
 
 // ---------- состояние ----------
-let dayType = 'weekday', speed = 6, running = false, st = null, agents = new Map(), seatOf = new Map(), seed = 20261030, logShown = 0, bubbles = [];
+let dayType = 'weekday', speed = 6, running = false, st = null, agents = new Map(), seatOf = new Map(), gone = new Set(), seed = 20261030, logShown = 0, bubbles = [];
 const scenario = () => ({morningBarista: scMorning.checked, morePastry: scPastry.checked, weekendLate: scLate.checked});
 function reset(){
-  agents.forEach(a => scene.remove(a.obj)); agents.clear(); seatOf.clear(); bubbles.forEach(b => b.el.remove()); bubbles = [];
+  agents.forEach(a => removePerson(a.obj)); agents.clear(); seatOf.clear(); gone.clear(); bubbles.forEach(b => b.el.remove()); bubbles = [];
   st = T.createDay({seed, dayType, scenario: scenario()}); logShown = 0; document.getElementById('lines').replaceChildren(); courier = null;
   running = false; playBtn.textContent = '▶ Старт'; guestCard.hidden = true; selected = null; draw();
 }
@@ -339,12 +359,14 @@ function targetFor(g){
 }
 function syncAgents(){
   for (const g of st.guests){
-    if (g.phase === 'outside') continue;
+    if (g.phase === 'outside' || gone.has(g.id)) continue;   // ушедший гость больше не появляется
     let a = agents.get(g.id);
-    if (!a){ const obj = person(MOODC(g.mood), g.seg ? SEGCOL[g.seg] : null); obj.position.set(OUT[0] + (Math.random()-.5)*2, 0, OUT[1]); obj.userData.gid = g.id; a = {obj, g, path:[DOOR], leaving:false}; agents.set(g.id, a); }
+    if (!a){ const obj = person(MOODC(g.mood), g.seg ? SEGCOL[g.seg] : null); obj.position.set(OUT[0] + (Math.random()-.5)*2, 0, OUT[1]); obj.userData.gid = g.id; a = {obj, g, path:[DOOR], goal:null, leaving:false}; agents.set(g.id, a); }
     a.obj.userData.body.material.color.setHex(MOODC(g.mood));
-    if (g.phase === 'left' && !a.leaving){ a.leaving = true; seatOf.delete(g.id); a.path = [DOOR, OUT]; }
-    if (!a.leaving){ const t = targetFor(g); if (t) a.path = a.obj.position.z > 6.8 ? [DOOR, t] : [t]; }
+    if (g.phase === 'left' && !a.leaving){ a.leaving = true; seatOf.delete(g.id);
+      a.path = a.obj.position.z > 6.5 ? [OUT] : [...route(a.obj.position, [AISLE, 6.4]).slice(0, -1), [AISLE, 6.4], DOOR, OUT]; }
+    if (!a.leaving){ const t = targetFor(g); const key = t && t.join(',');
+      if (t && key !== a.goal){ a.goal = key; a.path = a.obj.position.z > 6.8 ? [DOOR, [AISLE, 6.4], ...route({x: AISLE, z: 6.4}, t)] : route(a.obj.position, t); } }
   }
 }
 const dist = (p, t) => Math.hypot(p.x - t[0], p.z - t[1]);
@@ -352,12 +374,18 @@ function moveAgents(dtSim){
   const sp = 25 * dtSim; // метров за минуту модели
   agents.forEach((a, id) => {
     let budget = sp;
-    while (budget > 0 && a.path.length){ const t = a.path[0], d = dist(a.obj.position, t); if (d < .02){ a.path.shift(); continue; }
-      const k = Math.min(1, budget / d); a.obj.position.x += (t[0]-a.obj.position.x)*k; a.obj.position.z += (t[1]-a.obj.position.z)*k; a.obj.rotation.y = Math.atan2(t[0]-a.obj.position.x, t[1]-a.obj.position.z); budget -= d*k; if (k === 1) a.path.shift(); }
-    if (a.leaving && !a.path.length){ scene.remove(a.obj); agents.delete(id); if (selected === id){ guestCard.hidden = true; selected = null; } }
+    // не больше нескольких точек за кадр; частичный шаг обнуляет запас хода — без вычитания с округлением
+    for (let guard = 0; guard < 8 && budget > 1e-6 && a.path.length; guard++){
+      const t = a.path[0], p = a.obj.position, d = dist(p, t);
+      if (d < .02){ a.path.shift(); continue; }
+      a.obj.rotation.y = Math.atan2(t[0] - p.x, t[1] - p.z);
+      if (budget >= d){ p.x = t[0]; p.z = t[1]; budget -= d; a.path.shift(); }
+      else { p.x += (t[0] - p.x) * budget / d; p.z += (t[1] - p.z) * budget / d; budget = 0; }
+    }
+    if (a.leaving && !a.path.length){ removePerson(a.obj); agents.delete(id); gone.add(id); if (selected === id){ guestCard.hidden = true; selected = null; } }
   });
 }
-function bubble(gid, text, bad){ const a = agents.get(gid); if (!a) return; const el = document.createElement('div'); el.className = 'bub' + (bad ? ' bad' : ''); el.textContent = text; document.body.appendChild(el); bubbles.push({el, gid, ttl: 2.2}); }
+function bubble(gid, text, bad){ const a = agents.get(gid); if (!a) return; if (bubbles.length >= 6){ bubbles[0].el.remove(); bubbles.shift(); } const el = document.createElement('div'); el.className = 'bub' + (bad ? ' bad' : ''); el.textContent = text; document.body.appendChild(el); bubbles.push({el, gid, ttl: 2.2}); }
 
 // ---------- отрисовка панелей ----------
 const STEPS = [['C1–C2','Очередь к кассе', g => g.phase === 'queue'],['T01–T03','Касса: заказ и оплата', g => g.phase === 'order'],['T04','Готовят', g => g.phase === 'prep' || g.phase === 'waitPrep'],['T05–T06','Готово, забирают', g => g.phase === 'pickup'],['C5','Сидят в зале', g => g.phase === 'seated']];
@@ -456,6 +484,7 @@ document.getElementById('logbtn').onclick = () => {
 let yaw = 0, pitch = -.72, radius = 15.5, tgt = new THREE.Vector3(0,0,1.2), drag = null;
 renderer.domElement.addEventListener('pointerdown', e => drag = {x:e.clientX, y:e.clientY});
 addEventListener('pointerup', () => drag = null);
+addEventListener('pointercancel', () => drag = null);
 addEventListener('pointermove', e => { if (!drag) return; yaw -= (e.clientX - drag.x)*.005; pitch = Math.max(-1.35, Math.min(-.2, pitch - (e.clientY - drag.y)*.004)); drag = {x:e.clientX, y:e.clientY}; });
 renderer.domElement.addEventListener('wheel', e => { radius = Math.max(6, Math.min(24, radius + e.deltaY*.01)); e.preventDefault(); }, {passive:false});
 addEventListener('resize', () => { renderer.setSize(W(),H()); cam.aspect = W()/H(); cam.updateProjectionMatrix(); });
