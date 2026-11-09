@@ -55,7 +55,13 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
 #guest .x{float:right;background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer}
 .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;color:var(--muted);margin-top:4px}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 .tog{display:none}
-@media (max-width:980px){#left,#right{display:none}#left.show,#right.show{display:block;top:auto;bottom:150px;max-height:45%}.tog{display:inline-block}#feed{font-size:10.5px}}
+#scen{left:50%;transform:translateX(-50%);top:96px;width:min(470px,calc(100vw - 600px));max-height:calc(100% - 300px)}
+#scen .opt{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+#scen .l{color:var(--muted)}
+#scen label{cursor:pointer}#scen input{accent-color:var(--accent)}
+#scen select{font:inherit;font-size:12px;color:var(--ink);background:#2a201a;border:1px solid var(--line);border-radius:8px;padding:3px 6px;max-width:100%}
+#scen .note{margin:6px 0 0;color:var(--muted);font-size:11px}
+@media (max-width:980px){#scen{width:calc(100vw - 32px);top:auto;bottom:150px;max-height:45%}#left,#right{display:none}#left.show,#right.show{display:block;top:auto;bottom:150px;max-height:45%}.tog{display:inline-block}#feed{font-size:10.5px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600&family=JetBrains+Mono&family=Playfair+Display:wght@600&display=swap">
@@ -67,14 +73,24 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
   <button class="btn primary" id="play" type="button">▶ Старт</button>
   <span class="seg" id="speed" aria-label="Скорость"><button data-v="2" type="button">×2</button><button data-v="6" class="on" type="button">×6</button><button data-v="20" type="button">×20</button></span>
   <span class="seg" id="daytype" aria-label="Тип дня"><button data-v="weekday" class="on" type="button">Будний</button><button data-v="weekend" type="button">Выходной</button></span>
-  <label class="sc"><input type="checkbox" id="scMorning">2-й бариста 8:00–10:30</label>
-  <label class="sc"><input type="checkbox" id="scPastry">+6 выпечки, поставка 14:00</label>
-  <label class="sc"><input type="checkbox" id="scLate">Вых.: смена до 18:00</label>
+  <button class="btn" id="scenBtn" type="button" aria-expanded="true" aria-controls="scen">Сценарии</button>
   <button class="btn" id="restart" type="button">↺ Заново</button>
   <button class="btn" id="results" type="button">Итоги дня</button>
   <button class="btn tog" data-p="left" type="button">Процесс</button>
   <button class="btn tog" data-p="right" type="button">KPI</button>
 </div>
+
+<section class="panel" id="scen" aria-label="Сценарии">
+  <h3>Сценарии · что меняем</h3>
+  <div class="opt"><span class="l">Утро будней 8:00–10:30</span><select id="scOffload"><option value="none">как сейчас</option><option value="batch">батч вместо V60</option><option value="full">разгрузка бара: батч, колд брю, чай и выпечку отпускает кассир, завтраки собраны заранее</option></select></div>
+  <div class="opt"><label><input type="checkbox" id="scMorning"> Второй бариста с 8:00 (будни)</label><select id="scMachine"><option value="sep">отдельное оборудование</option><option value="shared">общая кофемашина</option></select><select id="scShift"><option value="2.5">смена 2,5 ч</option><option value="4">смена 4 ч</option></select></div>
+  <div class="opt"><label><input type="checkbox" id="scPastry"> Выпечка: будни 11 шт., выходные 17 шт. в утренней поставке</label></div>
+  <div class="opt"><label><input type="checkbox" id="scLate"> Выходные: второй бариста до 18:00</label></div>
+  <h3 style="margin-top:8px">Допущения</h3>
+  <div class="opt"><span class="l">Выпечки нет, гость</span><select id="scBehavior"><option value="walkaway">в 45 % случаев уходит без заказа</option><option value="drink">берёт заказ без выпечки</option></select></div>
+  <div class="opt"><label><input type="checkbox" id="scChurn"> Учитывать удержание</label><select id="scValue"><option value="790">месяц гостя 790 ₽ (данные)</option><option value="1920">1 920 ₽ (старое допущение)</option></select></div>
+  <p class="note">Доп. смены по 455 ₽/ч (350 ₽ + 30 % взносов). Смена сценария начинает день заново.</p>
+</section>
 
 <aside class="panel" id="left">
   <h3>Процесс BPMN · сейчас / за день</h3>
@@ -107,60 +123,100 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
 
 <script src="vendor/three.min.js"></script>
 <script>// Движок «цифрового двойника» кофейни Газлайт. Время — минуты от 0:00.
-// Параметры откалиброваны по учебному набору (01.04–25.10.2026).
+// Параметры откалиброваны по учебному набору (01.04–25.10.2026): поток, состав заказа и время
+// приготовления взяты из генератора учебных данных (generate_raw.py) и проверены по fact_sales.
 (function (root) {
   function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const HOUR_WD = [11, 13, 8, 6, 7, 9, 8, 6, 6, 6, 5, 4, 3, 2], HOUR_WE = [3, 6, 10, 12, 12, 11, 10, 9, 8, 7, 5, 4, 3, 2];
   const SEGMENTS = [['Чемпионы', .355], ['Лояльные', .208], ['Под угрозой ухода', .084], ['Новички', .081], ['Нуждаются во внимании', .064], ['Спящие', .208]];
+  // Напитки: доли среди проданных напитков в будни 8:00–10:30 (fact_sales). esp — эспрессо-машина (I01–I08, какао, матча).
+  const DRINK_MIX = [['esp', .799], ['cold', .073], ['v60', .043], ['batch', .045], ['tea', .041]];
+  // Время работы бара по техкартам генератора, мин: [от, до]
+  const PREP = { esp: [1.6, 2.6], cold: [1.6, 2.6], tea: [1.6, 2.6], v60: [3, 5], batch: [.6, 1.3], pastry: [.6, 1.3], hot: [3, 5], food: [.6, 1.3] };
+  const KIND_RU = { esp: 'кофе', cold: 'колд брю', tea: 'чай', v60: 'V60', batch: 'батч', pastry: 'выпечка', hot: 'сырники/тост', food: 'еда' };
   const P = {
     openMin: 8 * 60, closeMin: 22 * 60,
-    ordersPerDay: { weekday: 98, weekend: 122 },
-    pastryStock: { weekday: 12, weekend: 11 }, pastryProb: { weekday: .095, weekend: .115 },
-    extraPastry: 6, secondDeliveryAt: 14 * 60, pastryCost: 80, pastryPrice: 230,
-    checkTakeaway: 413, checkDineIn: 553, cogsShare: .226, wagePerHour: 350,
-    churnUplift: .07, futureValue: 1920, seats: 8, balkQueue: 5, balkProb: .5, payFail: .008, replaceAccept: .55, identified: .47, sla: 5,
+    ordersPerDay: { weekday: 106, weekend: 141 },          // все заказы в день по данным (вкл. отмены)
+    dayCV: { weekday: .064, weekend: .076 },                 // разброс спроса между днями сверх Пуассона (рост за период, сезон, дождь)
+    dineShare: { morningWd: .25, weekend: .55, other: .42 },
+    extraItems: { dine: .8, takeaway: .35 },                 // число позиций = 1 + Пуассон (как в генераторе)
+    foodProb: { dine: .52, takeaway: .31 },                  // доля еды среди доп. позиций (fact_sales, утро будней)
+    pastryShareFood: { morning: 3 / 7, day: 3 / 10 },        // выпечка среди еды: до 13:00 — 3 из 7 позиций, после — 3 из 10
+    pastryDemandK: { weekday: 1.03, weekend: 1.09 },        // поправка спроса на выпечку: продажи 8,3 / 10,6 шт., отказы 1,9 в выходной
+    hotShareFood: { morning: 2 / 7, day: 2 / 10 },           // сырники и тост (3–5 мин на баре)
+    setupMin: [5 / 60, 30 / 60],                             // пауза между оплатой и стартом приготовления (генератор: 5–30 с)
+    pastryStock: { weekday: 12, weekend: 11 },
+    pastryStockNew: { weekday: 11, weekend: 17 },            // сценарий «перераспределить запас»
+    pastryCost: 82, pastryPrice: 241, batchPrice: 250, v60Price: 320,
+    checkTakeaway: 405, checkDineIn: 522,                    // чек без выпечки (выпечка добавляется по 241 ₽)
+    cogsShare: .221,                                         // себестоимость без выпечки; вместе с выпечкой по 82 ₽ выходит 22,6 %
+    wagePerHour: 350, extraWagePerHour: 455,                 // доп. смены: 350 ₽/ч + 30 % взносов
+    morningShiftHours: 2.5, weekendLateHours: 2,
+    pastryWalkAway: .45,                                     // доля гостей, отказавшихся от всего заказа при нехватке (учебные данные)
+    churnUplift: .07, futureValueData: 790, futureValueOld: 1920,
+    seats: 8, balkQueue: 5, balkProb: .5, payFail: .008, identified: .47, sla: 5,
+    cashierMin: [40 / 60, 120 / 60],                         // приём заказа и оплата, мин (генератор: 40–120 с)
+    offloadFrom: 8 * 60, offloadTo: 10.5 * 60,
+    cashierExtra: { batch: .5, cold: .5, tea: .8, pastry: .4, hot: .4, food: .4 }, // работа кассира за позицию, мин
   };
+  const DEFAULT_SC = { offload: 'none', morningBarista: false, sharedMachine: false, morningShiftHours: null, pastryRebalance: false, weekendLate: false, pastryBehavior: 'walkaway' };
+  const scOf = (s) => Object.assign({}, DEFAULT_SC, s || {});
+  const morningEnd = (sc) => 480 + 60 * (sc.morningShiftHours || P.morningShiftHours);
   function baristasAt(min, dayType, sc) {
-    let n = 1;
+    sc = scOf(sc); let n = 1;
     if (dayType === 'weekend' && min >= 600 && min < (sc.weekendLate ? 1080 : 960)) n = 2;
-    if (dayType === 'weekday' && sc.morningBarista && min >= 480 && min < 630) n = 2;
+    if (dayType === 'weekday' && sc.morningBarista && min >= 480 && min < morningEnd(sc)) n = 2;
     return n;
   }
-  function staffHours(dayType, sc) { // кассир 14 ч + бариста 14 ч + доп. смены
-    let h = 28;
-    if (dayType === 'weekend') h += sc.weekendLate ? 8 : 6;
-    if (dayType === 'weekday' && sc.morningBarista) h += 2.5;
-    return h;
+  function staffCost(dayType, sc) { // кассир 14 ч + бариста 14 ч (+ 6 ч второго бариста в выходные) по 350 ₽; доп. смены по 455 ₽
+    sc = scOf(sc);
+    const baseH = 28 + (dayType === 'weekend' ? 6 : 0);
+    let extraH = 0;
+    if (dayType === 'weekend' && sc.weekendLate) extraH += P.weekendLateHours;
+    if (dayType === 'weekday' && sc.morningBarista) extraH += sc.morningShiftHours || P.morningShiftHours;
+    return { baseH, extraH, cost: baseH * P.wagePerHour + extraH * P.extraWagePerHour };
   }
+  const pick = (R, mix) => { let u = R(), c = 0; for (const [k, p] of mix) { c += p; if (u <= c) return k; } return mix[mix.length - 1][0]; };
+  const unif = (R, [a, b]) => a + R() * (b - a);
+  function poisson(R, lam) { let k = 0, p = Math.exp(-lam), s = p; const u = R(); while (u > s) { k++; p *= lam / k; s += p; } return k; }
 
   function createDay(opts) {
-    const dayType = opts.dayType || 'weekday', sc = Object.assign({ morningBarista: false, morePastry: false, weekendLate: false }, opts.scenario || {});
+    const dayType = opts.dayType || 'weekday', sc = scOf(opts.scenario);
     const R = rng(opts.seed || 1);
     const w = dayType === 'weekend' ? HOUR_WE : HOUR_WD, ws = w.reduce((a, b) => a + b, 0);
-    // приходы гостей (Пуассон по часам)
-    const arrivals = [];
-    w.forEach((wh, i) => { const lam = P.ordersPerDay[dayType] * 1.04 * wh / ws; let k = 0, p = Math.exp(-lam), s = p, u = R(); while (u > s) { k++; p *= lam / k; s += p; }
-      for (let j = 0; j < k; j++) { let m = R() * 60; if (dayType === 'weekday' && i <= 1) m = i === 0 ? 15 + R() * 45 : R() * 55; arrivals.push(P.openMin + i * 60 + m); } });
+    // приходы гостей (Пуассон по часам, внутри часа равномерно — как в генераторе)
+    const arrivals = [], z = Math.sqrt(-2 * Math.log(1 - R())) * Math.cos(2 * Math.PI * R());
+    const dayK = opts.dayFactor || Math.max(.7, 1 + P.dayCV[dayType] * z);
+    w.forEach((wh, i) => { const k = poisson(R, P.ordersPerDay[dayType] * dayK * wh / ws); for (let j = 0; j < k; j++) arrivals.push(P.openMin + i * 60 + R() * 60); });
     arrivals.sort((a, b) => a - b);
     let gid = 0;
     const guests = arrivals.map((t) => {
       const h = Math.floor(t / 60), morningWd = dayType === 'weekday' && h < 11;
       const ident = R() < P.identified;
       let seg = null; if (ident) { let u = R(), c = 0; for (const [n, p] of SEGMENTS) { c += p; if (u <= c) { seg = n; break; } } seg = seg || 'Спящие'; }
-      const dineP = (morningWd ? .25 : dayType === 'weekend' ? .55 : .42);
+      const dineP = morningWd ? P.dineShare.morningWd : dayType === 'weekend' ? P.dineShare.weekend : P.dineShare.other;
       const dine = R() < dineP;
-      const items = 1 + (R() < (dine ? .6 : .3) ? 1 : 0) + (R() < (dine ? .2 : .05) ? 1 : 0);
-      const wantsPastry = R() < P.pastryProb[dayType] * (dine ? 1.3 : .8) * 1.1;
-      let prep = 0; for (let i = 0; i < items; i++) { const u = R(); prep += i === 0 ? 1.8 + R() * 1.0 : u < .45 ? .6 + R() * .7 : u < .85 ? 1.9 + R() * 1.1 : 3 + R() * 2; }
-      const check = (dine ? P.checkDineIn : P.checkTakeaway) * (.8 + R() * .4) + (wantsPastry ? P.pastryPrice : 0);
-      return { id: ++gid, order: 100000 + gid, t, dine, items, wantsPastry, prep, check: Math.round(check), seg, ident,
-        phase: 'outside', mood: 1, events: [], seatTime: 15 + R() * 30, rnd: R() };
+      const n = 1 + poisson(R, dine ? P.extraItems.dine : P.extraItems.takeaway);
+      const per = h <= 12 ? 'morning' : 'day';
+      const kinds = [pick(R, DRINK_MIX)];
+      for (let i = 1; i < n; i++) {
+        if (R() < P.foodProb[dine ? 'dine' : 'takeaway']) {
+          const u = R(), ps = P.pastryShareFood[per] * P.pastryDemandK[dayType], hs = P.hotShareFood[per];
+          kinds.push(u < ps ? 'pastry' : u < ps + hs ? 'hot' : 'food');
+        } else kinds.push(pick(R, DRINK_MIX));
+      }
+      const times = kinds.map((k) => unif(R, PREP[k]));
+      const nPastry = kinds.filter((k) => k === 'pastry').length;
+      const base = (dine ? P.checkDineIn : P.checkTakeaway) * (.8 + R() * .4);
+      return { id: ++gid, order: 100000 + gid, t, dine, items: n, kinds, times, wantsPastry: nPastry > 0, nPastry, setup: unif(R, P.setupMin),
+        check: Math.round(base + nPastry * P.pastryPrice), seg, ident, phase: 'outside', mood: 1, events: [], seatTime: 15 + R() * 30, rnd: R(), u: [R(), R()] };
     });
     const st = {
-      dayType, sc, t: P.openMin - 5, guests, queue: [], cashier: null, cashierFreeAt: 0, kitchen: [], baristas: [],
-      waiting: [], seated: [], stock: P.pastryStock[dayType], stockLog: [], delivered2: false,
-      log: [], counters: { arrived: 0, registered: 0, paid: 0, ready: 0, issued: 0, lostBalk: 0, lostStock: 0, lostPay: 0, noSeat: 0, replaced: 0 },
-      revenue: 0, waits: [], hourly: Array.from({ length: 14 }, () => ({ orders: 0, inSla: 0, withWait: 0, revenue: 0 })),
+      dayType, sc, t: P.openMin - 5, guests, queue: [], cashier: null, cashierFreeAt: 0, kitchen: [], baristas: [], machineFreeAt: 0,
+      waiting: [], seated: [], stock: (sc.pastryRebalance ? P.pastryStockNew : P.pastryStock)[dayType], stockLog: [],
+      log: [], counters: { arrived: 0, registered: 0, paid: 0, ready: 0, issued: 0, lostBalk: 0, lostStock: 0, lostPay: 0, noSeat: 0, replaced: 0, missedPastry: 0, pastrySold: 0, v60ToBatch: 0, offloaded: 0 },
+      revenue: 0, pastryRevenue: 0, cashierBusyMorning: 0, cashierExtraMorning: 0, qWaitMorning: [0, 0], waits: [],
+      hourly: Array.from({ length: 14 }, () => ({ orders: 0, inSla: 0, withWait: 0, revenue: 0 })),
       writeOff: 0, done: false, R,
     };
     st.stockLog.push([st.t, st.stock]);
@@ -169,13 +225,22 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
   const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.floor(m % 60)).padStart(2, '0');
   function ev(st, g, step, source, text) { const r = { t: st.t, order: g ? g.order : null, step, source, text }; st.log.push(r); if (g) g.events.push(r); return r; }
 
+  // Разгрузка бара в будни 8:00–10:30: меняет состав работы бара и добавляет работу кассиру
+  function applyOffload(st, g, t) {
+    const sc = st.sc; let extra = 0;
+    if (st.dayType !== 'weekday' || sc.offload === 'none' || t < P.offloadFrom || t >= P.offloadTo) return 0;
+    g.kinds = g.kinds.map((k, i) => { if (k !== 'v60') return k; st.counters.v60ToBatch++; g.check -= P.v60Price - P.batchPrice; g.times[i] = unif(st.R, PREP.batch); return 'batch'; });
+    if (sc.offload === 'full') {
+      g.kinds.forEach((k, i) => { if (P.cashierExtra[k] != null && g.times[i] > 0) { extra += P.cashierExtra[k]; g.times[i] = 0; st.counters.offloaded++; } });
+    }
+    return extra;
+  }
+
   function step(st, dt) {
     if (st.done) return;
     const end = st.t + dt;
     while (st.t < end && !st.done) {
       const tick = Math.min(.25, end - st.t); st.t += tick; const t = st.t; const R = st.R;
-      // поставки
-      if (st.sc.morePastry && !st.delivered2 && t >= P.secondDeliveryAt) { st.delivered2 = true; st.stock += P.extraPastry; ev(st, null, 'Склад', 'Склад', `Вторая поставка выпечки: +${P.extraPastry} шт.`); st.stockLog.push([t, st.stock]); }
       // приходы
       for (const g of st.guests) {
         if (g.phase !== 'outside' || g.t > t) continue;
@@ -187,40 +252,68 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
       if (st.cashier && t >= st.cashierFreeAt) {
         const g = st.cashier; st.cashier = null;
         if (g.payFailed) { g.phase = 'left'; g.mood = 0; g.lost = 'оплата'; st.counters.lostPay++; ev(st, g, 'T07', 'Эквайринг', 'Оплата не прошла, заказ отменён'); }
-        else if (g.cancelStock) { g.phase = 'left'; g.mood = 0; g.lost = 'выпечка'; st.counters.lostStock++; ev(st, g, 'T07', 'Касса', 'Нет выпечки, замену не принял — отмена'); }
+        else if (g.cancelStock) { g.phase = 'left'; g.mood = 0; g.lost = 'выпечка'; st.counters.lostStock++; ev(st, g, 'T07', 'Касса', 'Нет выпечки, гость отказался от всего заказа'); }
         else {
-          g.paidAt = t; st.counters.paid++; st.revenue += 0; g.phase = 'waitPrep'; st.kitchen.push(g); st.waiting.push(g);
+          g.paidAt = t; st.counters.paid++; g.phase = 'waitPrep'; st.waiting.push(g);
           ev(st, g, 'T03', 'Эквайринг', `Оплата ${g.check} ₽ прошла`);
+          if (g.times.reduce((a, x) => a + x, 0) <= 0) finish(st, g, t); // всё отпустил кассир: бар не нужен, гость не ждёт очереди к бару
+          else st.kitchen.push(g);
         }
       }
       if (!st.cashier && st.queue.length) {
         const g = st.queue.shift(); st.cashier = g; g.phase = 'order'; st.counters.registered++;
         const qWait = t - g.qAt; if (qWait > 4) g.mood = Math.min(g.mood, .5);
-        ev(st, g, 'T01', 'Касса', `Заказ #${g.order}: ${g.items} поз., ${g.dine ? 'в зале' : 'с собой'}${g.seg ? ', карта: ' + g.seg : ''}`);
-        let dur = 1.1 + R() * 1.0;
-        if (g.wantsPastry) {
-          if (st.stock > 0) { st.stock--; st.stockLog.push([t, st.stock]); ev(st, g, 'G01', 'Склад', `Выпечка есть, осталось ${st.stock} шт.`); }
-          else { dur += .5; g.mood = Math.min(g.mood, .5); ev(st, g, 'T02', 'Касса', 'Выпечки нет — предложили замену');
-            if (R() < P.replaceAccept) { st.counters.replaced++; g.check -= P.pastryPrice - 150; } else { g.cancelStock = true; } }
+        if (g.t >= P.offloadFrom && g.t < P.offloadTo) { st.qWaitMorning[0] += qWait; st.qWaitMorning[1]++; }
+        ev(st, g, 'T01', 'Касса', `Заказ #${g.order}: ${g.kinds.map((k) => KIND_RU[k]).join(', ')}, ${g.dine ? 'в зале' : 'с собой'}${g.seg ? ', карта: ' + g.seg : ''}`);
+        let dur = unif(R, P.cashierMin);
+        if (g.nPastry) {
+          const got = Math.min(st.stock, g.nPastry), miss = g.nPastry - got;
+          if (got) { st.stock -= got; st.stockLog.push([t, st.stock]); ev(st, g, 'G01', 'Склад', `Выпечка есть, осталось ${st.stock} шт.`); }
+          if (miss) {
+            dur += .5; g.mood = Math.min(g.mood, .5); st.counters.missedPastry++;
+            if (st.sc.pastryBehavior === 'walkaway' && g.u[0] < P.pastryWalkAway) {
+              g.cancelStock = true; if (got) { st.stock += got; st.stockLog.push([t, st.stock]); }
+              ev(st, g, 'T02', 'Касса', 'Выпечки нет');
+            } else {
+              st.counters.replaced++; let left = miss;
+              for (let i = g.kinds.length - 1; i >= 0 && left; i--) if (g.kinds[i] === 'pastry') { g.kinds.splice(i, 1); g.times.splice(i, 1); left--; }
+              g.items = g.kinds.length; g.nPastry = got; g.check -= miss * P.pastryPrice;
+              ev(st, g, 'T02', 'Касса', 'Выпечки нет, взял заказ без неё');
+            }
+          }
         }
-        if (!g.cancelStock && R() < P.payFail) g.payFailed = true;
+        if (!g.cancelStock) {
+          const extra = applyOffload(st, g, t); dur += extra;
+          if (t >= P.offloadFrom && t < P.offloadTo) st.cashierExtraMorning += extra;
+          if (R() < P.payFail) g.payFailed = true;
+        }
+        if (t >= P.offloadFrom && t < P.offloadTo) st.cashierBusyMorning += dur;
         st.cashierFreeAt = t + dur;
       }
       // бар: T04 → T05
       const nb = baristasAt(t, st.dayType, st.sc);
       while (st.baristas.length < nb) st.baristas.push({ freeAt: t, cur: null });
       st.baristas.forEach((b, i) => {
-        if (b.cur && t >= b.freeAt) { const g = b.cur; b.cur = null; g.readyAt = t; g.phase = 'pickup'; st.counters.ready++;
-          const wait = g.readyAt - g.paidAt; st.waits.push(wait); const hi = Math.min(13, Math.floor(g.paidAt / 60) - 8); const hr = st.hourly[hi]; hr.withWait++; if (wait <= P.sla) hr.inSla++;
-          if (wait > 8) g.mood = Math.min(g.mood, .2); else if (wait > P.sla) g.mood = Math.min(g.mood, .55);
-          ev(st, g, 'T05', 'Экран заказов', `Готово через ${wait.toFixed(1)} мин`); g.issueAt = t + .3 + R() * .6; }
-        if (!b.cur && i < nb && st.kitchen.length) { const g = st.kitchen.shift(); b.cur = g; g.phase = 'prep'; g.prepStart = t; b.freeAt = t + g.prep; ev(st, g, 'T04', 'Экран заказов', `Бариста ${i + 1} готовит`); }
+        if (b.cur && t >= b.freeAt) { const g = b.cur; b.cur = null; finish(st, g, t); }
+        if (!b.cur && i < nb && st.kitchen.length) {
+          const g = st.kitchen.shift(); const work = g.times.reduce((a, x) => a + x, 0);
+          if (work <= 0) { finish(st, g, t); return; }       // всё отпустил кассир, бар не нужен
+          b.cur = g; g.phase = 'prep'; g.prepStart = t;
+          const start = t + g.setup;
+          if (st.sc.sharedMachine && st.dayType === 'weekday') { // общая кофемашина: эспрессо-часть заказа идёт по очереди
+            const m = g.kinds.reduce((a, k, j) => a + (k === 'esp' ? g.times[j] : 0), 0), rest = work - m;
+            if (m > 0) { const ms = Math.max(start + rest, st.machineFreeAt); st.machineFreeAt = ms + m; b.freeAt = ms + m; }
+            else b.freeAt = start + work;                      // в заказе нет эспрессо — машина не нужна
+          } else b.freeAt = start + work;
+          ev(st, g, 'T04', 'Экран заказов', `Бариста ${i + 1} готовит`);
+        }
       });
       if (st.baristas.length > nb) st.baristas = st.baristas.filter((b, i) => i < nb || b.cur);
       // выдача T06, зал C5, уход C6
       for (const g of st.waiting) {
         if (g.phase === 'pickup' && t >= g.issueAt) {
-          g.phase = 'issued'; st.counters.issued++; st.revenue += g.check; const hi = Math.min(13, Math.floor(g.t / 60) - 8); st.hourly[hi].orders++; st.hourly[hi].revenue += g.check;
+          g.phase = 'issued'; st.counters.issued++; st.revenue += g.check; st.counters.pastrySold += g.nPastry; st.pastryRevenue += g.nPastry * P.pastryPrice;
+          const hi = Math.min(13, Math.floor(g.t / 60) - 8); st.hourly[hi].orders++; st.hourly[hi].revenue += g.check;
           ev(st, g, 'T06', 'Экран заказов', `Выдан, ${g.check} ₽`);
           if (g.dine) { if (st.seated.length < P.seats) { g.phase = 'seated'; g.leaveAt = t + g.seatTime; st.seated.push(g); ev(st, g, 'C5', 'Касса', 'Сел за стол'); }
             else { g.phase = 'left'; g.mood = Math.min(g.mood, .4); st.counters.noSeat++; ev(st, g, 'C5', 'Опрос', 'Нет свободных мест — ушёл с заказом'); g.done = true; } }
@@ -236,21 +329,32 @@ canvas.mini{width:100%;height:70px;margin-top:4px}
       }
     }
   }
+  function finish(st, g, t) {
+    g.readyAt = t; g.phase = 'pickup'; st.counters.ready++;
+    const wait = g.readyAt - g.paidAt; st.waits.push(wait); const hi = Math.min(13, Math.floor(g.paidAt / 60) - 8); const hr = st.hourly[hi]; hr.withWait++; if (wait <= P.sla) hr.inSla++;
+    if (wait > 8) g.mood = Math.min(g.mood, .2); else if (wait > P.sla) g.mood = Math.min(g.mood, .55);
+    ev(st, g, 'T05', 'Экран заказов', `Готово через ${wait.toFixed(1)} мин`); g.issueAt = t + .3 + st.R() * .6;
+  }
   function summary(st) {
     const w = st.waits.slice().sort((a, b) => a - b), med = w.length ? w[Math.floor(w.length / 2)] : 0;
     const c = st.counters, lost = c.lostBalk + c.lostStock + c.lostPay;
     const issued = st.guests.filter((g) => g.phase === 'issued' || g.phase === 'seated' || (g.phase === 'left' && !g.lost));
     const happy = issued.filter((g) => g.mood >= .5).length, unhappy = issued.length - happy + lost + c.noSeat;
-    const churnRisk = unhappy * P.churnUplift * P.futureValue;
-    const labor = staffHours(st.dayType, st.sc) * P.wagePerHour, writeOffCost = st.writeOff * P.pastryCost, cogs = st.revenue * P.cogsShare;
+    const hs = (a, b) => { let i = 0, n = 0; for (let h = a; h <= b; h++) { i += st.hourly[h].inSla; n += st.hourly[h].withWait; } return n ? i / n : 0; };
+    const sc = staffCost(st.dayType, st.sc), labor = sc.cost, extraLabor = sc.extraH * P.extraWagePerHour;
+    const writeOffCost = st.writeOff * P.pastryCost, cogs = (st.revenue - st.pastryRevenue) * P.cogsShare + c.pastrySold * P.pastryCost;
+    const result = st.revenue - cogs - writeOffCost - labor;
+    const churn790 = unhappy * P.churnUplift * P.futureValueData, churn1920 = unhappy * P.churnUplift * P.futureValueOld;
     return { orders: c.issued, arrived: c.arrived, lost, lostBalk: c.lostBalk, lostStock: c.lostStock, lostPay: c.lostPay, noSeat: c.noSeat, replaced: c.replaced,
-      sla: w.length ? w.filter((x) => x <= P.sla).length / w.length : 0, median: med, p90: w.length ? w[Math.floor(w.length * .9)] : 0,
+      missedPastry: c.missedPastry, pastrySold: c.pastrySold, v60ToBatch: c.v60ToBatch, offloaded: c.offloaded,
+      sla: w.length ? w.filter((x) => x <= P.sla).length / w.length : 0, sla89: hs(0, 1), sla9: hs(1, 1), median: med, p90: w.length ? w[Math.floor(w.length * .9)] : 0,
       revenue: st.revenue, avgCheck: c.issued ? st.revenue / c.issued : 0, csat: issued.length ? happy / issued.length : 0,
-      writeOff: st.writeOff, writeOffCost, labor, cogs, result: st.revenue - cogs - writeOffCost - labor, unhappy, churnRisk,
-      resultWithChurn: st.revenue - cogs - writeOffCost - labor - churnRisk };
+      cashierLoadMorning: st.cashierBusyMorning / 150, cashierExtraPerHour: st.cashierExtraMorning / 2.5, queueWaitMorning: st.qWaitMorning[1] ? st.qWaitMorning[0] / st.qWaitMorning[1] : 0,
+      writeOff: st.writeOff, writeOffCost, labor, extraLabor, cogs, result, unhappy,
+      churn790, churn1920, resultWith790: result - churn790, resultWith1920: result - churn1920 };
   }
   function runDay(opts) { const st = createDay(opts); while (!st.done && st.t < 26 * 60) step(st, 5); return summary(st); }
-  root.GaslightTwin = { createDay, step, summary, runDay, baristasAt, hhmm, P, SEGMENTS };
+  root.GaslightTwin = { createDay, step, summary, runDay, baristasAt, staffCost, hhmm, P, SEGMENTS, KIND_RU, DEFAULT_SC };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>
@@ -329,17 +433,23 @@ function route(p, t){
 
 // ---------- состояние ----------
 let dayType = 'weekday', speed = 6, running = false, st = null, agents = new Map(), seatOf = new Map(), gone = new Set(), seed = 20261030, logShown = 0, bubbles = [];
-const scenario = () => ({morningBarista: scMorning.checked, morePastry: scPastry.checked, weekendLate: scLate.checked});
+const scenario = () => ({offload: scOffload.value, morningBarista: scMorning.checked, sharedMachine: scMachine.value === 'shared', morningShiftHours: +scShift.value, pastryRebalance: scPastry.checked, weekendLate: scLate.checked, pastryBehavior: scBehavior.value});
+const churnOn = () => scChurn.checked, churnValue = () => +scValue.value;
+const churnOf = (s) => churnValue() === 1920 ? s.churn1920 : s.churn790;
 function reset(){
   agents.forEach(a => removePerson(a.obj)); agents.clear(); seatOf.clear(); gone.clear(); bubbles.forEach(b => b.el.remove()); bubbles = [];
   st = T.createDay({seed, dayType, scenario: scenario()}); logShown = 0; document.getElementById('lines').replaceChildren(); courier = null;
   running = false; playBtn.textContent = '▶ Старт'; guestCard.hidden = true; selected = null; draw();
 }
-const playBtn = document.getElementById('play'), scMorning = document.getElementById('scMorning'), scPastry = document.getElementById('scPastry'), scLate = document.getElementById('scLate');
-playBtn.onclick = () => { if (st.done){ reset(); } running = !running; playBtn.textContent = running ? '❚❚ Пауза' : '▶ Продолжить'; };
+const $ = (id) => document.getElementById(id);
+const playBtn = $('play'), scOffload = $('scOffload'), scMorning = $('scMorning'), scMachine = $('scMachine'), scShift = $('scShift'), scPastry = $('scPastry'), scLate = $('scLate'), scBehavior = $('scBehavior'), scChurn = $('scChurn'), scValue = $('scValue');
+playBtn.onclick = () => { if (st.done){ reset(); } running = !running; playBtn.textContent = running ? '❚❚ Пауза' : '▶ Продолжить'; if (running && !$('scen').hidden){ $('scen').hidden = true; $('scenBtn').setAttribute('aria-expanded', 'false'); } };
 document.querySelectorAll('#speed button').forEach(b => b.onclick = () => { speed = +b.dataset.v; document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b)); });
 document.querySelectorAll('#daytype button').forEach(b => b.onclick = () => { dayType = b.dataset.v; document.querySelectorAll('#daytype button').forEach(x => x.classList.toggle('on', x === b)); reset(); });
-[scMorning, scPastry, scLate].forEach(c => c.onchange = () => { st.sc = scenario(); });
+[scOffload, scMorning, scMachine, scShift, scPastry, scLate, scBehavior].forEach(c => c.onchange = () => reset());
+[scChurn, scValue].forEach(c => c.onchange = () => draw());
+$('scenBtn').onclick = () => { const p = $('scen'), open = p.hidden; p.hidden = !open; $('scenBtn').setAttribute('aria-expanded', String(open)); };
+if (matchMedia('(max-width:980px)').matches){ $('scen').hidden = true; $('scenBtn').setAttribute('aria-expanded', 'false'); }
 document.getElementById('restart').onclick = () => { seed++; reset(); };
 document.getElementById('results').onclick = showResults;
 document.querySelectorAll('.tog').forEach(b => b.onclick = () => document.getElementById(b.dataset.p).classList.toggle('show'));
@@ -394,8 +504,8 @@ function draw(){
   const c = st.counters, nb = T.baristasAt(st.t, st.dayType, st.sc);
   staff.baristas[1].visible = nb > 1;
   const live = STEPS.map(([id, n, f]) => `<div class="row"><span class="id">${id}</span><span class="t">${n}</span><b>${st.guests.filter(f).length}</b></div>`).join('');
-  const tot = [['T01','Зарегистрировано', c.registered],['G03','Оплачено', c.paid],['T06 · E02','Выдано', c.issued],['T02','Приняли замену', c.replaced],['T07','Потеряно: нет выпечки', c.lostStock],['T07','Потеряно: оплата', c.lostPay],['C2','Ушли из-за очереди', c.lostBalk],['C5','Не нашли места', c.noSeat]]
-    .map(([id,n,v]) => `<div class="row"><span class="id">${id}</span><span class="t">${n}</span><b class="${/Потеряно|Ушли|места/.test(n) && v ? 'bad' : ''}">${v}</b></div>`).join('');
+  const tot = [['T01','Зарегистрировано', c.registered],['G03','Оплачено', c.paid],['T06 · E02','Выдано', c.issued],['T02','Не хватило выпечки', c.missedPastry],['T07','Ушли без заказа: нет выпечки', c.lostStock],['T07','Потеряно: оплата', c.lostPay],['C2','Ушли из-за очереди', c.lostBalk],['C5','Не нашли места', c.noSeat]]
+    .map(([id,n,v]) => `<div class="row"><span class="id">${id}</span><span class="t">${n}</span><b class="${/Потеряно|Ушли|места|хватило/.test(n) && v ? 'bad' : ''}">${v}</b></div>`).join('');
   document.getElementById('bpmn').innerHTML = live + `<div class="row"><span class="id">ресурс</span><span class="t">Бариста на смене</span><b class="${nb>1?'good':''}">${nb}</b></div>` + tot;
   // CJM: средняя эмоция гостей на этапе (текущие) или накопленная
   const by = (f) => { const a = st.guests.filter(f); return a.length ? a.reduce((s,g) => s + g.mood, 0) / a.length : null; };
@@ -411,9 +521,10 @@ function draw(){
   const progress = Math.min(1, Math.max(0, (st.t - P.openMin) / (P.closeMin - P.openMin)));
   document.getElementById('eco').innerHTML = [
     ['Прогноз выручки дня', money(FORECAST[st.dayType])], ['Факт к этому часу', money(s.revenue)], ['План к этому часу', money(FORECAST[st.dayType] * progress)],
-    ['Себестоимость (22,6 %)', '−' + money(s.cogs)], ['Списания выпечки', '−' + money(st.done ? s.writeOffCost : 0)], ['ФОТ смены', '−' + money(s.labor * progress)],
-    ['Результат дня', money(s.revenue - s.cogs - (st.done ? s.writeOffCost : 0) - s.labor * progress)]
-  ].map(([n,v],i) => `<div class="row"><span class="t">${n}</span><b class="${i === 6 ? 'good' : ''}">${v}</b></div>`).join('');
+    ['Себестоимость (≈22,6 %)', '−' + money(s.cogs)], ['Списания выпечки (82 ₽/шт.)', '−' + money(st.done ? s.writeOffCost : 0)], [s.extraLabor ? 'ФОТ, вкл. доп. смены по 455 ₽/ч' : 'ФОТ смены', '−' + money(s.labor * progress)],
+    ['Результат дня', money(s.revenue - s.cogs - (st.done ? s.writeOffCost : 0) - s.labor * progress)],
+    ...(churnOn() ? [[`Удержание (оценка, ${RU.format(churnValue())} ₽)`, '−' + money(churnOf(s))], ['Результат с удержанием', money(s.revenue - s.cogs - (st.done ? s.writeOffCost : 0) - s.labor * progress - churnOf(s))]] : [])
+  ].map(([n,v],i,a) => `<div class="row"><span class="t">${n}</span><b class="${i === 6 || (i === a.length - 1 && a.length > 7) ? 'good' : ''}">${v}</b></div>`).join('');
 }
 function drawChart(){
   const cv = document.getElementById('chart'), x = cv.getContext('2d'), w = cv.width, h = cv.height; x.clearRect(0,0,w,h);
@@ -433,7 +544,7 @@ function pushLog(){
   const box = document.getElementById('lines');
   for (; logShown < st.log.length; logShown++){
     const e = st.log[logShown];
-    const notable = /ушёл|отмена|Нет выпечки|не прошла|Нет свободных|Недоволен/.test(e.text) || (/Готово через/.test(e.text) && parseFloat(e.text.match(/[\d.]+/)) > 8);
+    const notable = /ушёл|отмена|Нет выпечки|Выпечки нет|не прошла|Нет свободных|Недоволен/.test(e.text) || (/Готово через/.test(e.text) && parseFloat(e.text.match(/[\d.]+/)) > 8);
     if (e.order != null){ const g = st.guests.find(x => x.order === e.order); if (g && notable) bubble(g.id, e.text.replace(/^Заказ #\d+: /,''), true); if (g && e.step === 'T05' && !notable && Math.random() < .25) bubble(g.id, e.text); }
     const ln = document.createElement('div'); ln.className = 'ln' + (notable ? ' bad' : '');
     ln.innerHTML = `${T.hhmm(e.t)} <span class="src">[${e.source}]</span> ${e.step} · ${e.order ? '#' + e.order + ' ' : ''}`; ln.append(e.text);
@@ -447,7 +558,7 @@ function showGuest(gid){ const g = st.guests.find(x => x.id === gid); if (!g) re
   guestCard.innerHTML = '';
   const x = document.createElement('button'); x.className = 'x'; x.textContent = '×'; x.onclick = () => { guestCard.hidden = true; selected = null; };
   const h = document.createElement('h3'); h.style.cssText = 'margin:0 0 4px;font-family:var(--disp);font-size:18px'; h.textContent = `Гость #${g.order}`;
-  const meta = document.createElement('div'); meta.style.color = 'var(--muted)'; meta.textContent = `${g.dine ? 'В зале' : 'С собой'} · ${g.items} поз. · ${g.check} ₽ · ${g.seg ? 'карта: ' + g.seg : 'без карты'}${g.wantsPastry ? ' · хочет выпечку' : ''}`;
+  const meta = document.createElement('div'); meta.style.color = 'var(--muted)'; meta.textContent = `${g.dine ? 'В зале' : 'С собой'} · ${g.kinds.map(k => T.KIND_RU[k]).join(', ')} · ${g.check} ₽ · ${g.seg ? 'карта: ' + g.seg : 'без карты'}`;
   const ul = document.createElement('div'); ul.style.cssText = 'margin-top:6px;font-family:var(--mono);font-size:11px;line-height:1.6';
   g.events.forEach(e => { const r = document.createElement('div'); r.textContent = `${T.hhmm(e.t)} ${e.step} [${e.source}] ${e.text}`; ul.appendChild(r); });
   guestCard.append(x, h, meta, ul); guestCard.hidden = false; }
@@ -458,16 +569,22 @@ renderer.domElement.addEventListener('click', (e) => { ndc.set(e.clientX/W()*2-1
 
 // ---------- итоги дня ----------
 function showResults(){
-  const base = T.runDay({seed, dayType, scenario:{}}), cur = T.runDay({seed, dayType, scenario: scenario()});
-  const isBase = !scMorning.checked && !scPastry.checked && !scLate.checked;
-  const rows = [['Заказов выдано', 'orders', v => RU.format(v)], ['Потеряно гостей (очередь, выпечка, оплата)', 'lost', v => RU.format(v)], ['Готово за 5 мин', 'sla', pct], ['Медиана ожидания, мин', 'median', v => v.toFixed(1)], ['P90 ожидания, мин', 'p90', v => v.toFixed(1)], ['Довольных гостей', 'csat', pct], ['Выручка', 'revenue', money], ['Списано выпечки, шт.', 'writeOff', v => RU.format(v)], ['ФОТ', 'labor', money], ['Результат дня', 'result', money], ['Будущая выручка под риском (оценка)', 'churnRisk', money], ['Результат с учётом удержания', 'resultWithChurn', money]];
+  const sc = scenario(), base = T.runDay({seed, dayType, scenario:{pastryBehavior: sc.pastryBehavior}}), cur = T.runDay({seed, dayType, scenario: sc});
+  const isBase = sc.offload === 'none' && !sc.morningBarista && !sc.pastryRebalance && !sc.weekendLate;
+  const rows = [['Заказов выдано', 'orders', v => RU.format(v)], ['Потеряно гостей (очередь, выпечка, оплата)', 'lost', v => RU.format(v)], ['Не хватило выпечки, гостей', 'missedPastry', v => RU.format(v)], ['Из них ушли без заказа', 'lostStock', v => RU.format(v)],
+    ['Готово за 5 мин, весь день', 'sla', pct], ['Готово за 5 мин, оплата 8–9 ч', 'sla89', pct], ['Медиана ожидания, мин', 'median', v => v.toFixed(1)], ['P90 ожидания, мин', 'p90', v => v.toFixed(1)], ['Довольных гостей', 'csat', pct],
+    ['Выручка', 'revenue', money], ['Себестоимость', 'cogs', money], ['Списано выпечки, шт.', 'writeOff', v => RU.format(v)], ['ФОТ', 'labor', money],
+    ['Результат дня без удержания', 'result', money], ['С удержанием, месяц гостя 790 ₽', 'resultWith790', money], ['С удержанием, месяц гостя 1 920 ₽', 'resultWith1920', money]];
+  const lowGood = ['lost','missedPastry','lostStock','median','p90','writeOff','labor'], neutral = ['cogs'];
+  const pick = churnOn() ? (churnValue() === 1920 ? 'resultWith1920' : 'resultWith790') : 'result';
   const b = document.getElementById('mbox');
-  b.innerHTML = `<h2>Итоги дня: ${dayType === 'weekday' ? 'будний' : 'выходной'} день</h2><p>Тот же поток гостей (seed ${seed}), прогнанный дважды: без изменений и с выбранными сценариями. Ставка ФОТ 350 ₽/ч, себестоимость выпечки 80 ₽ — учебные допущения. «Под риском»: недовольный гость на 7 п.п. реже возвращается (опрос: 78 % против 85 %), ценность гостя за месяц — 4 визита × 480 ₽.</p>`;
+  b.innerHTML = `<h2>Итоги дня: ${dayType === 'weekday' ? 'будний' : 'выходной'} день</h2><p>Тот же поток гостей (seed ${seed}) прогнан дважды: без изменений и с выбранными сценариями. Доп. смены считаем по 455 ₽/ч (350 ₽ + 30 % взносов), выпечку по 241 ₽ при себестоимости 82 ₽. Строки с удержанием опираются на допущение: недовольный гость возвращается на 7 п.п. реже (опрос: 78 % против 85 %, p = 0,14). Месяц гостя по данным 790 ₽, старое допущение 1 920 ₽ (4 визита по 480 ₽). Главная строка показывает результат без удержания${churnOn() ? ', жирным выделена строка с выбранным удержанием' : ''}.</p>`;
   const t = document.createElement('table'); t.innerHTML = `<tr><th>Показатель</th><th>База</th><th>${isBase ? 'Сценарии не выбраны' : 'Сценарий'}</th><th>Δ</th></tr>` +
-    rows.map(([n,k,f]) => { const d = cur[k] - base[k]; const good = ['lost','median','p90','writeOff','labor','churnRisk'].includes(k) ? d < 0 : d > 0;
-      return `<tr><td>${n}</td><td>${f(base[k])}</td><td>${f(cur[k])}</td><td class="${Math.abs(d) < 1e-6 ? '' : good ? 'good' : 'bad'}">${Math.abs(d) < 1e-6 ? '—' : (d > 0 ? '+' : '') + (k === 'sla' || k === 'csat' ? (d*100).toFixed(0) + ' п.п.' : f(d).replace(' ₽',' ₽'))}</td></tr>`; }).join('');
+    rows.map(([n,k,f]) => { const d = cur[k] - base[k]; const good = lowGood.includes(k) ? d < 0 : d > 0;
+      const css = k === pick ? ' style="font-weight:700;color:var(--ink)"' : (k === 'resultWith790' || k === 'resultWith1920') ? ' style="color:var(--muted)"' : '';
+      return `<tr${css}><td>${n}</td><td>${f(base[k])}</td><td>${f(cur[k])}</td><td class="${Math.abs(d) < 1e-6 || neutral.includes(k) ? '' : good ? 'good' : 'bad'}">${Math.abs(d) < 1e-6 ? '—' : (d > 0 ? '+' : '') + (k === 'sla' || k === 'sla89' || k === 'csat' ? (d*100).toFixed(0) + ' п.п.' : f(d))}</td></tr>`; }).join('');
   b.appendChild(t);
-  const p = document.createElement('p'); p.innerHTML = 'По 30 смоделированным дням: второй бариста в будни 8:00–10:30 даёт +594 ₽/день с учётом удержания (SLA 59 % → 72 %); дополнительная выпечка окупается только в выходные (+1 297 ₽/день); продление смены в выходные до 18:00 не окупается (−179 ₽/день).'; b.appendChild(p);
+  const p = document.createElement('p'); p.innerHTML = 'По 30 смоделированным дням (доля в срок для оплат 8–9 ч в будни, база 38 %). Батч вместо V60 даёт 40 % (на 500 днях 47 %), разгрузка бара 72 %, ФОТ не растёт. Второй бариста 8:00–10:30 даёт 82 % при отдельном оборудовании и 60 % при общей кофемашине. Его результат без удержания −1 117 ₽ в день, при месяце гостя 790 ₽ −352 ₽, при 1 920 ₽ +743 ₽. Выпечка 17 шт. утром в выходные: +999 ₽ в день, если 45 % гостей без выпечки уходят без заказа, и +370 ₽, если берут напиток. Будни 11 шт. вместо 12: списания с 3,7 до 3,0 шт. в день, результат около нуля. Второй бариста в выходные до 18:00 даёт −922 ₽ в день, не вводим.'; b.appendChild(p);
   const close = document.createElement('button'); close.className = 'btn primary'; close.textContent = 'Закрыть'; close.onclick = () => modal.hidden = true; b.appendChild(close);
   modal.hidden = false;
 }
@@ -494,8 +611,8 @@ const clk = new THREE.Clock(), tmp = new THREE.Vector3(); let acc = 0;
 function frame(){
   const dt = Math.min(clk.getDelta(), .1);
   if (running && !st.done){ const dSim = dt * speed; T.step(st, dSim); syncAgents(); moveAgents(dSim); pushLog();
-    // курьер: поставка утром и в 14:00
-    if (st.t < P.openMin + 4 || (st.sc.morePastry && st.t >= P.secondDeliveryAt && st.t < P.secondDeliveryAt + 5)){ staff.courier.visible = true; const k = ((st.t % 5) / 5); staff.courier.position.set(1.6, 0, OUT[1] - (OUT[1] + 1.2) * Math.sin(k*Math.PI)); } else staff.courier.visible = false;
+    // курьер: утренняя поставка выпечки
+    if (st.t < P.openMin + 4){ staff.courier.visible = true; const k = ((st.t % 5) / 5); staff.courier.position.set(1.6, 0, OUT[1] - (OUT[1] + 1.2) * Math.sin(k*Math.PI)); } else staff.courier.visible = false;
     acc += dt; if (acc > .2){ acc = 0; draw(); if (selected) showGuest(selected); }
     if (st.done){ running = false; playBtn.textContent = '▶ Новый день'; draw(); showResults(); } }
   else if (running) moveAgents(dt * speed);
